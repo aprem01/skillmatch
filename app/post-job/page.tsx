@@ -228,7 +228,23 @@ function PostJobContent() {
     }
 
     setIsLoadingRoles(true);
-    debounceRef.current = setTimeout(() => {
+    debounceRef.current = setTimeout(async () => {
+      // Try live AI API first, fall back to mock data
+      try {
+        const res = await fetch("/api/employer/roles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: value.trim() }),
+        });
+        const data = await res.json();
+        if (data.variants && data.variants.length > 0) {
+          setRoleVariants(data.variants);
+          setShowDropdown(true);
+          setIsLoadingRoles(false);
+          return;
+        }
+      } catch {}
+      // Fallback to mock
       const results = findRoleVariants(value);
       setRoleVariants(results);
       setShowDropdown(results.length > 0);
