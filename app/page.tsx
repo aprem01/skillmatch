@@ -1,38 +1,30 @@
 import Link from "next/link";
-import {
-  Check,
-  X,
-  ArrowRight,
-  Users,
-  Target,
-  Eye,
-  Clock,
-  TrendingUp,
-} from "lucide-react";
+import Image from "next/image";
+import { Check, X } from "lucide-react";
 
 const valueProps = [
   {
-    icon: Users,
+    icon: "/icon-checkmark.png",
     title: "Top candidates, already matched",
     desc: "Only see workers who meet 100% of your required skills — no more resumes to screen.",
   },
   {
-    icon: Target,
+    icon: "/icon-target.png",
     title: "Prioritize what matters most",
     desc: "Select top skills, certifications, and experience to find the best fit.",
   },
   {
-    icon: Eye,
+    icon: "/icon-magnifying-glass.png",
     title: "See why each candidate fits",
     desc: "Clear insights show exactly how each candidate matches your role.",
   },
   {
-    icon: Clock,
+    icon: "/icon-stars.png",
     title: "Hire in minutes, not days",
     desc: "Instantly connect with your best matches — no more waiting for applications.",
   },
   {
-    icon: TrendingUp,
+    icon: "/icon-certificate.png",
     title: "A stronger talent pool over time",
     desc: "We encourage workers to gain skills and certifications, so you get better candidates. Forever.",
   },
@@ -57,11 +49,15 @@ export default function Home() {
       <div className="h-1 bg-teal w-full" />
 
       {/* Header */}
-      <header className="w-full px-6 py-5">
+      <header className="w-full px-6 py-5 bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto">
-          <span className="text-2xl font-bold italic text-teal tracking-tight">
-            Skillmatch
-          </span>
+          <Image
+            src="/skillmatch-logo.png"
+            alt="Skillmatch"
+            width={180}
+            height={42}
+            priority
+          />
         </div>
       </header>
 
@@ -81,10 +77,16 @@ export default function Home() {
           <div className="mt-8">
             <Link
               href="/post-job"
-              className="inline-flex items-center gap-2 bg-teal hover:bg-teal-dark text-white font-semibold text-lg px-8 py-3.5 rounded-full transition-colors"
+              className="inline-flex items-center gap-2.5 bg-teal hover:bg-teal-dark text-white font-semibold text-lg px-8 py-3.5 rounded-full transition-colors"
             >
               Find Workers
-              <ArrowRight className="w-5 h-5" />
+              <Image
+                src="/forward-arrow.png"
+                alt=""
+                width={18}
+                height={18}
+                aria-hidden="true"
+              />
             </Link>
           </div>
           <p className="mt-3 text-gray-400 text-sm">
@@ -92,14 +94,20 @@ export default function Home() {
           </p>
         </section>
 
-        {/* Value Props */}
+        {/* Value Props — using Caroline's icons */}
         <section className="mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
           {valueProps.map((prop) => (
             <div key={prop.title} className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 rounded-full bg-teal flex items-center justify-center mb-4">
-                <prop.icon className="w-6 h-6 text-white" strokeWidth={2} />
+              <div className="w-16 h-16 flex items-center justify-center mb-4">
+                <Image
+                  src={prop.icon}
+                  alt=""
+                  width={56}
+                  height={56}
+                  aria-hidden="true"
+                />
               </div>
-              <h3 className="font-semibold text-gray-900 text-sm leading-snug">
+              <h3 className="font-semibold text-teal text-sm leading-snug">
                 {prop.title}
               </h3>
               <p className="mt-2 text-gray-500 text-xs leading-relaxed">
@@ -114,10 +122,13 @@ export default function Home() {
           {/* Table header */}
           <div className="grid grid-cols-[1fr_auto_auto] items-end gap-x-6 pb-4 border-b border-gray-100">
             <div />
-            <div className="text-center w-32">
-              <span className="text-lg font-bold italic text-teal">
-                Skillmatch
-              </span>
+            <div className="flex justify-center w-32">
+              <Image
+                src="/skillmatch-logo.png"
+                alt="Skillmatch"
+                width={120}
+                height={28}
+              />
             </div>
             <div className="text-center w-32">
               <span className="text-sm font-medium text-gray-400">

@@ -328,8 +328,13 @@ function PostJobContent() {
   return (
     <div className="min-h-screen bg-coolgray-50">
       {/* Header */}
-      <header className="w-full px-6 py-4">
-        <span className="text-2xl font-bold text-teal">Skillmatch</span>
+      <header className="w-full px-6 py-5 bg-white border-b border-gray-100">
+        <div className="max-w-5xl mx-auto">
+          <a href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/skillmatch-logo.png" alt="Skillmatch" width={180} height={42} />
+          </a>
+        </div>
       </header>
 
       {/* Main card */}
@@ -569,13 +574,15 @@ function PostJobContent() {
             type="button"
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className={`w-full py-3.5 rounded-full text-white font-semibold text-base transition-all ${
+            className={`w-full py-3.5 rounded-full text-white font-semibold text-base transition-all flex items-center justify-center gap-2.5 ${
               canSubmit
                 ? "bg-teal hover:bg-teal-dark shadow-md hover:shadow-lg cursor-pointer"
                 : "bg-coolgray-200 text-gray-400 cursor-not-allowed"
             }`}
           >
-            See Candidates &rarr;
+            See Candidates
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/forward-arrow.png" alt="" width={18} height={18} aria-hidden="true" />
           </button>
         </div>
       </main>

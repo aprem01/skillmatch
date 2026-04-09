@@ -90,7 +90,10 @@ export default function CandidatesPage() {
       {/* Header */}
       <header className="py-4 px-4 bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold italic text-teal">Skillmatch</h1>
+          <a href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/skillmatch-logo.png" alt="Skillmatch" width={180} height={42} />
+          </a>
           <button
             onClick={() => router.push("/post-job")}
             className="text-sm text-gray-500 hover:text-teal transition-colors"
