@@ -1,0 +1,58 @@
+# Skillmatch
+
+> Skillmatch is the employer-side platform of a two-sided skill-based hiring marketplace. Enter a job title or skills, we match you with qualified candidates in seconds. No resumes to screen, no unqualified applicants. Candidates ranked by skill match percentage.
+
+## What makes Skillmatch different
+
+- **Skill-first hiring** — post a role, our AI auto-generates the required skills taxonomy. No manual job description writing.
+- **100% match filter** — only see candidates who meet your required skills. No unqualified applicants in your inbox.
+- **Anonymous candidates** — reduce bias. Candidates are identified by skill match score + anonymous handle until you unlock them.
+- **Required vs. optional toggle** — tap a skill pill to move it between "must-have" and "nice-to-have."
+- **Auto-pay conversion** — enter salary per year, month, or hour — the platform converts automatically.
+- **Pay per unlock** — free to post, free to browse matches. Pay only when you unlock a candidate to contact.
+
+## Who is it for
+
+- Recruiters and hiring managers at SMBs and startups
+- HR teams tired of resume screening
+- Founders hiring their first employees
+- Healthcare, trades, tech, and services companies hiring skill-based roles
+
+## Primary pages
+
+- [Home](https://skillmatch-red.vercel.app/): Value props + comparison to traditional job boards
+- [Post a Job](https://skillmatch-red.vercel.app/post-job): Type role → AI auto-populates skills → see candidates
+- [Candidates](https://skillmatch-red.vercel.app/candidates): Ranked candidate list with match breakdown
+
+## Key vocabulary
+
+- **Required skills** (teal pills) — must-have to qualify
+- **Optional skills** (green pills) — nice-to-have, bumps ranking
+- **Match score** — percentage of required + optional skills a candidate has
+- **Unlock** — reveal a candidate's contact details (billing trigger)
+- **Anonymous handle** — candidate identifier (e.g. "KeeTo325") shown until unlocked
+
+## Partner platform
+
+Skillmatch is the **employer side** of a two-sided skill marketplace. The job-seeker side is [PayRanker](https://workpath-iota.vercel.app), where workers enter their skills and see jobs sorted by pay. Candidates on Skillmatch are PayRanker users who have opted to receive employer contact.
+
+## Tech stack
+
+- Next.js 14 (App Router, TypeScript)
+- Tailwind CSS
+- Neon PostgreSQL (shared with PayRanker — same user pool)
+- Neo4j Aura (shared skill graph)
+- Claude Sonnet 4 (role classification + skill taxonomy generation)
+- Capacitor (iOS app wrapper)
+- Vercel (hosting)
+
+## API
+
+- `POST /api/employer/roles` — suggest role variants + required/optional skills for a typed role
+- `POST /api/employer/candidates` — return ranked candidates matching a set of required + optional skills
+
+## Contact
+
+- Website: https://skillmatch-red.vercel.app
+- Job seeker side: https://workpath-iota.vercel.app
+- GitHub: https://github.com/aprem01/skillmatch
