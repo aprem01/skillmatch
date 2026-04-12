@@ -27,6 +27,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        <script src="/native-bridge.js" defer />
+      </head>
       <body className="font-sans antialiased bg-coolgray-50 text-gray-900">
         {children}
       </body>
