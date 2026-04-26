@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import SkillmatchHeader from "@/components/SkillmatchHeader";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data — role variants with pre-populated skills               */
@@ -327,15 +328,7 @@ function PostJobContent() {
 
   return (
     <div className="min-h-screen bg-coolgray-50">
-      {/* Header */}
-      <header className="w-full px-6 py-5 bg-white border-b border-gray-100">
-        <div className="max-w-5xl mx-auto">
-          <a href="/">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/skillmatch-logo.png" alt="Skillmatch" width={180} height={42} />
-          </a>
-        </div>
-      </header>
+      <SkillmatchHeader active="dashboard" messageCount={21} />
 
       {/* Main card */}
       <main className="max-w-2xl mx-auto px-4 pb-16">
