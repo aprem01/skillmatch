@@ -4,9 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Check, ArrowRight, X } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
-import RecruiterVerificationModal, {
-  isRecruiterVerified,
-} from "@/components/RecruiterVerificationModal";
 
 interface CandidateRow {
   handle: string;
@@ -60,11 +57,6 @@ export default function CandidatesPage() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [inviteMessage, setInviteMessage] = useState("");
 
-  // Recruiter verification gate
-  const [verificationOpen, setVerificationOpen] = useState(false);
-  const [pendingInviteCandidate, setPendingInviteCandidate] =
-    useState<CandidateRow | null>(null);
-
   useEffect(() => {
     const saved = localStorage.getItem("skillmatch_job");
     if (!saved) {
@@ -94,12 +86,6 @@ export default function CandidatesPage() {
   }
 
   function openInvite(c: CandidateRow) {
-    // Gate: only verified recruiters can contact candidates
-    if (!isRecruiterVerified()) {
-      setPendingInviteCandidate(c);
-      setVerificationOpen(true);
-      return;
-    }
     setInviteCandidate(c);
     setSelectedSlots([]);
     setInviteMessage("");
@@ -107,22 +93,6 @@ export default function CandidatesPage() {
 
   function closeInvite() {
     setInviteCandidate(null);
-  }
-
-  function handleVerified() {
-    setVerificationOpen(false);
-    // Resume the invite flow with the pending candidate
-    if (pendingInviteCandidate) {
-      setInviteCandidate(pendingInviteCandidate);
-      setSelectedSlots([]);
-      setInviteMessage("");
-      setPendingInviteCandidate(null);
-    }
-  }
-
-  function handleVerificationCancel() {
-    setVerificationOpen(false);
-    setPendingInviteCandidate(null);
   }
 
   function renderRow(
@@ -324,13 +294,6 @@ export default function CandidatesPage() {
           </div>
         </section>
       </main>
-
-      {/* Recruiter Verification Modal — gates candidate contact */}
-      <RecruiterVerificationModal
-        open={verificationOpen}
-        onClose={handleVerificationCancel}
-        onVerified={handleVerified}
-      />
 
       {/* Invite to Interview Modal */}
       {inviteCandidate && (
