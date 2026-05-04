@@ -1,24 +1,40 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 const client = new Anthropic();
 
-export async function POST(req: Request) {
-  const { query } = await req.json();
-
-  if (!query || query.length < 2) {
-    return NextResponse.json({ variants: [] });
+/** Fire-and-forget analytics log — never blocks user response */
+async function logEvent(event: string, metadata: Record<string, unknown>) {
+  try {
+    await prisma.analyticsEvent.create({
+      data: { event, metadata: JSON.stringify(metadata) },
+    });
+  } catch {
+    // analytics never blocks the user flow
   }
+}
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1000,
-    messages: [
-      {
-        role: "user",
-        content: `You are a job classification expert. An employer typed this role: "${query}"
+export async function POST(req: Request) {
+  const startTime = Date.now();
+  let query = "";
+  try {
+    const body = await req.json();
+    query = body.query || "";
+
+    if (!query || query.length < 2) {
+      return NextResponse.json({ variants: [] });
+    }
+
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: `You are a job classification expert. An employer typed this role: "${query}"
 
 Return ONLY valid JSON (no markdown):
 {
@@ -42,19 +58,44 @@ Rules:
 - Optional skills should be differentiators
 - Pay estimates should be realistic US market rates
 - estimatedCandidates: realistic number (50-500 range)`,
-      },
-    ],
-  });
+        },
+      ],
+    });
 
-  let text = (message.content[0] as { type: string; text: string }).text;
-  text = text
-    .replace(/^```(?:json)?\s*\n?/i, "")
-    .replace(/\n?```\s*$/i, "")
-    .trim();
+    let text = (message.content[0] as { type: string; text: string }).text;
+    text = text
+      .replace(/^```(?:json)?\s*\n?/i, "")
+      .replace(/\n?```\s*$/i, "")
+      .trim();
 
-  try {
-    return NextResponse.json(JSON.parse(text));
-  } catch {
+    let parsed: { variants?: { title: string }[] };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      void logEvent("employer_role_search", {
+        query,
+        variantCount: 0,
+        parseError: true,
+        durationMs: Date.now() - startTime,
+      });
+      return NextResponse.json({ variants: [] });
+    }
+
+    void logEvent("employer_role_search", {
+      query,
+      variantCount: parsed.variants?.length || 0,
+      variantTitles: parsed.variants?.map((v) => v.title) || [],
+      durationMs: Date.now() - startTime,
+    });
+
+    return NextResponse.json(parsed);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "Unknown";
+    void logEvent("employer_role_search", {
+      query,
+      error: errMsg,
+      durationMs: Date.now() - startTime,
+    });
     return NextResponse.json({ variants: [] });
   }
 }

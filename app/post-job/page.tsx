@@ -321,6 +321,20 @@ function PostJobContent() {
       payPeriod,
     };
     localStorage.setItem("skillmatch_job", JSON.stringify(jobData));
+
+    // Fire-and-forget: log the candidate search intent so /admin can see
+    // what employers actually look for. Captures Marielee-style debugging
+    // signal even though the candidates page renders mock data for MVP.
+    fetch("/api/employer/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: jobData.role,
+        requiredSkills,
+        optionalSkills,
+      }),
+    }).catch(() => {});
+
     router.push("/candidates");
   };
 

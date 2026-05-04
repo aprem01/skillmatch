@@ -1,20 +1,51 @@
 import { NextResponse } from "next/server";
-// import { prisma } from "@/lib/prisma"; // for future real queries
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+/** Fire-and-forget analytics log — never blocks user response */
+async function logEvent(event: string, metadata: Record<string, unknown>) {
+  try {
+    await prisma.analyticsEvent.create({
+      data: { event, metadata: JSON.stringify(metadata) },
+    });
+  } catch {
+    // analytics never blocks the user flow
+  }
+}
+
 export async function POST(req: Request) {
-  const { requiredSkills, optionalSkills } = await req.json();
+  const startTime = Date.now();
+  try {
+    const { requiredSkills, optionalSkills, role } = await req.json();
 
-  // MVP: generate mock candidates based on the required skills
-  // In production: query UserSkill table to find real matches
+    // MVP: generate mock candidates based on the required skills
+    // In production: query UserSkill table to find real matches
+    const mockCandidates = generateMockCandidates(
+      requiredSkills || [],
+      optionalSkills || []
+    );
 
-  const mockCandidates = generateMockCandidates(
-    requiredSkills || [],
-    optionalSkills || []
-  );
+    void logEvent("employer_candidate_search", {
+      role: role || null,
+      requiredSkillCount: (requiredSkills || []).length,
+      optionalSkillCount: (optionalSkills || []).length,
+      requiredSkills: (requiredSkills || []).slice(0, 12),
+      candidatesReturned: mockCandidates.length,
+      perfectMatches: mockCandidates.filter((c) => c.matchScore >= 90).length,
+      durationMs: Date.now() - startTime,
+      isEmpty: mockCandidates.length === 0,
+    });
 
-  return NextResponse.json({ candidates: mockCandidates });
+    return NextResponse.json({ candidates: mockCandidates });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "Unknown";
+    void logEvent("employer_candidate_search", {
+      error: errMsg,
+      durationMs: Date.now() - startTime,
+    });
+    return NextResponse.json({ candidates: [] });
+  }
 }
 
 function generateMockCandidates(required: string[], optional: string[]) {
