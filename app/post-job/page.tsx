@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, Share2, ArrowRight } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
 
 /* ------------------------------------------------------------------ */
@@ -154,7 +155,7 @@ function SkillPill({
   onToggle: () => void;
   animate: boolean;
 }) {
-  const bg = type === "required" ? "bg-teal" : "bg-green";
+  const bg = type === "required" ? "bg-skBlue" : "bg-skGreen";
   return (
     <button
       type="button"
@@ -169,11 +170,51 @@ function SkillPill({
           e.stopPropagation();
           onRemove();
         }}
-        className="ml-0.5 text-white/70 hover:text-white text-xs leading-none"
+        className="ml-0.5 text-white hover:text-white/80 text-xs leading-none"
       >
         &times;
       </span>
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom radio (white bg, teal stroke, gray dot when filled)         */
+/* ------------------------------------------------------------------ */
+
+function SkRadio({
+  name,
+  value,
+  checked,
+  onChange,
+  label,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer text-sm text-skGray select-none">
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={onChange}
+        className="sr-only"
+      />
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white border-2 border-skTeal"
+        aria-hidden="true"
+      >
+        {checked && (
+          <span className="block w-1.5 h-1.5 rounded-full bg-skGray" />
+        )}
+      </span>
+      {label}
+    </label>
   );
 }
 
@@ -183,6 +224,7 @@ function SkillPill({
 
 function PostJobContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // --- state ---
   const [roleInput, setRoleInput] = useState("");
@@ -199,10 +241,36 @@ function PostJobContent() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [newSkill, setNewSkill] = useState("");
   const [animatedSkills, setAnimatedSkills] = useState<Set<string>>(new Set());
+  const [shareToast, setShareToast] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- prefill from share-link query params on mount ---
+  useEffect(() => {
+    if (!searchParams) return;
+    const shared = searchParams.get("shared");
+    if (shared !== "1") return;
+    const sharedRole = searchParams.get("role") || "";
+    const sharedSkills = searchParams.get("skills") || "";
+    if (sharedRole) {
+      setRoleInput(sharedRole);
+      setSelectedRole(sharedRole);
+    }
+    if (sharedSkills) {
+      const list = sharedSkills
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (list.length > 0) {
+        setRequiredSkills(list);
+        setAnimatedSkills(new Set(list));
+        setTimeout(() => setAnimatedSkills(new Set()), 500);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- close dropdown on outside click ---
   useEffect(() => {
@@ -301,6 +369,36 @@ function PostJobContent() {
     setTimeout(() => setAnimatedSkills(new Set()), 500);
   };
 
+  // --- share link ---
+  const handleShare = async () => {
+    if (typeof window === "undefined") return;
+    const role = selectedRole || roleInput.trim();
+    const allSkills = [...requiredSkills, ...optionalSkills];
+    const params = new URLSearchParams();
+    params.set("shared", "1");
+    if (role) params.set("role", role);
+    if (allSkills.length > 0) params.set("skills", allSkills.join(","));
+    const url = `${window.location.origin}/post-job?${params.toString()}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast("Link copied! Share it with your team.");
+    } catch {
+      // fallback: legacy execCommand path
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setShareToast("Link copied! Share it with your team.");
+      } catch {
+        setShareToast("Couldn't copy automatically — copy this URL manually.");
+      }
+    }
+    setTimeout(() => setShareToast(null), 3000);
+  };
+
   // --- computed stats ---
   const totalSkills = requiredSkills.length + optionalSkills.length;
   const candidateCount = totalSkills > 0 ? Math.max(20, 200 - totalSkills * 8) : 0;
@@ -312,6 +410,8 @@ function PostJobContent() {
   const handleSubmit = () => {
     const jobData = {
       role: selectedRole || roleInput,
+      selectedRole: selectedRole || roleInput,
+      roleInput,
       requiredSkills,
       optionalSkills,
       employment,
@@ -338,260 +438,288 @@ function PostJobContent() {
     router.push("/candidates");
   };
 
-  const canSubmit = (selectedRole || roleInput.trim()) && totalSkills > 0;
+  const canSubmit = !!((selectedRole || roleInput.trim()) && totalSkills > 0);
 
   return (
     <div className="min-h-screen bg-coolgray-50">
       <SkillmatchHeader active="dashboard" messageCount={21} />
 
-      {/* Main card */}
-      <main className="max-w-2xl mx-auto px-4 pb-16">
-        <div className="bg-white rounded-2xl shadow-sm border border-coolgray-200 p-6 sm:p-8 animate-fade-in">
-          {/* Headline */}
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+      <main className="max-w-5xl mx-auto px-6 pb-16">
+        {/* Headline + subhead sit directly on the gray page background */}
+        <div className="pt-6 pb-8">
+          <h1
+            className="text-3xl sm:text-4xl font-bold text-left mb-2"
+            style={{ color: "#719192", fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+          >
             Find the best candidates in seconds.
           </h1>
-          <p className="text-gray-500 mb-8">
+          <p
+            className="text-base sm:text-lg font-semibold text-left"
+            style={{ color: "#719192", fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+          >
             Start with a role — we&apos;ll handle the skills and find your best matches.
           </p>
+        </div>
 
-          {/* ---- Role input ---- */}
-          <div className="relative mb-6" ref={dropdownRef}>
-            <label htmlFor="role-input" className="block text-sm font-semibold text-gray-700 mb-1.5">
-              Role
-            </label>
-            <input
-              ref={inputRef}
-              id="role-input"
-              type="text"
-              value={roleInput}
-              onChange={(e) => handleRoleInput(e.target.value)}
-              onFocus={() => roleVariants.length > 0 && setShowDropdown(true)}
-              placeholder="ex: Sales Associate, HVAC Assistant, Design Director"
-              className="w-full px-4 py-3 rounded-xl border-2 border-coolgray-200 focus:border-teal focus:outline-none transition-colors text-gray-900 placeholder:text-gray-400"
-            />
+        {/* ---- Role input (no card around it) ---- */}
+        <div className="relative mb-6 max-w-2xl" ref={dropdownRef}>
+          <label htmlFor="role-input" className="block text-sm font-semibold text-skGray mb-1.5">
+            Role
+          </label>
+          <input
+            ref={inputRef}
+            id="role-input"
+            type="text"
+            value={roleInput}
+            onChange={(e) => handleRoleInput(e.target.value)}
+            onFocus={() => roleVariants.length > 0 && setShowDropdown(true)}
+            placeholder="ex: Sales Associate, HVAC Assistant, Design Director"
+            className="w-full bg-white px-5 py-3.5 rounded-xl border-2 border-skTeal-bright focus:border-[4px] focus:border-skTeal-bright focus:outline-none transition-[border-width] text-gray-900 placeholder:text-skTeal"
+          />
 
-            {/* Loading indicator */}
-            {isLoadingRoles && (
-              <div className="absolute right-4 top-[42px]">
-                <div className="w-5 h-5 border-2 border-teal border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-
-            {/* Autocomplete dropdown */}
-            {showDropdown && roleVariants.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-coolgray-200 rounded-xl shadow-lg overflow-hidden">
-                {roleVariants.map((v) => (
-                  <button
-                    key={v.title}
-                    type="button"
-                    onClick={() => selectVariant(v)}
-                    className="w-full text-left px-4 py-3 hover:bg-teal-light transition-colors text-gray-800 border-b border-coolgray-100 last:border-b-0"
-                  >
-                    <span className="font-medium">{v.title}</span>
-                    <span className="block text-xs text-gray-400 mt-0.5">
-                      {v.requiredSkills.slice(0, 3).join(", ")}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ---- Skills basket ---- */}
-          {totalSkills > 0 && (
-            <div className="mb-6 border border-coolgray-200 rounded-xl p-4 animate-fade-in">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Skills &mdash; click to toggle required/optional
-              </p>
-
-              {/* Required */}
-              {requiredSkills.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-xs text-gray-400 mb-1.5">Required</p>
-                  <div className="flex flex-wrap gap-2">
-                    {requiredSkills.map((skill) => (
-                      <SkillPill
-                        key={`req-${skill}`}
-                        label={skill}
-                        type="required"
-                        onRemove={() => removeSkill(skill)}
-                        onToggle={() => toggleSkill(skill)}
-                        animate={animatedSkills.has(skill)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Optional */}
-              {optionalSkills.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">Nice to have</p>
-                  <div className="flex flex-wrap gap-2">
-                    {optionalSkills.map((skill) => (
-                      <SkillPill
-                        key={`opt-${skill}`}
-                        label={skill}
-                        type="optional"
-                        onRemove={() => removeSkill(skill)}
-                        onToggle={() => toggleSkill(skill)}
-                        animate={animatedSkills.has(skill)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Manual add */}
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addManualSkill()}
-                  placeholder="Add a skill..."
-                  className="flex-1 px-3 py-2 rounded-lg border border-coolgray-200 focus:border-teal focus:outline-none text-sm text-gray-800 placeholder:text-gray-400"
-                />
-                <button
-                  type="button"
-                  onClick={addManualSkill}
-                  className="px-4 py-2 bg-teal text-white text-sm font-medium rounded-lg hover:bg-teal-dark transition-colors"
-                >
-                  Add
-                </button>
-              </div>
+          {/* Loading indicator */}
+          {isLoadingRoles && (
+            <div className="absolute right-4 top-[46px]">
+              <div className="w-5 h-5 border-2 border-skTeal border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 
-          {/* ---- Employment details ---- */}
-          {totalSkills > 0 && (
-            <div className="space-y-5 mb-6 animate-fade-in">
-              {/* Employment type */}
-              <fieldset>
-                <legend className="text-sm font-semibold text-gray-700 mb-2">Employment</legend>
-                <div className="flex flex-wrap gap-4">
-                  {([
-                    ["contract", "Contract"],
-                    ["part_time", "Part-time"],
-                    ["full_time", "Full-time"],
-                  ] as const).map(([val, label]) => (
-                    <label key={val} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                      <input
-                        type="radio"
-                        name="employment"
-                        value={val}
-                        checked={employment === val}
-                        onChange={() => setEmployment(val)}
-                        className="w-4 h-4 accent-teal"
-                      />
-                      {label}
-                    </label>
+          {/* Autocomplete dropdown */}
+          {showDropdown && roleVariants.length > 0 && (
+            <div className="absolute z-20 left-0 right-0 mt-1 bg-white border-2 border-skTeal-bright rounded-xl shadow-lg overflow-hidden">
+              {roleVariants.map((v) => (
+                <button
+                  key={v.title}
+                  type="button"
+                  onClick={() => selectVariant(v)}
+                  className="w-full text-left px-4 py-3 hover:bg-skBeta-bg transition-colors text-gray-800 border-b border-coolgray-100 last:border-b-0"
+                >
+                  <span className="font-medium">{v.title}</span>
+                  <span className="block text-xs text-skGray-desc mt-0.5">
+                    {v.requiredSkills.slice(0, 3).join(", ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ---- Share with team (above Skills Basket) ---- */}
+        {totalSkills > 0 && (
+          <div className="max-w-2xl mb-3 flex items-center justify-between">
+            <p className="text-xs text-skGray-desc">
+              Not sure on skills? Share this with your hiring manager.
+            </p>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-skGray-desc text-skGray text-xs font-semibold bg-white hover:border-skGray hover:text-skGray transition-colors"
+            >
+              <Share2 size={14} />
+              Share with team
+            </button>
+          </div>
+        )}
+
+        {/* ---- Skills basket (white card only here) ---- */}
+        {totalSkills > 0 && (
+          <div className="max-w-2xl bg-white rounded-2xl shadow-sm border border-coolgray-200 p-5 sm:p-6 mb-6 animate-fade-in">
+            <p className="text-xs font-semibold text-skGray uppercase tracking-wide mb-3">
+              Skills &mdash; click to toggle required/optional
+            </p>
+
+            {/* Required */}
+            {requiredSkills.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-skGray-desc mb-1.5">Required</p>
+                <div className="flex flex-wrap gap-2">
+                  {requiredSkills.map((skill) => (
+                    <SkillPill
+                      key={`req-${skill}`}
+                      label={skill}
+                      type="required"
+                      onRemove={() => removeSkill(skill)}
+                      onToggle={() => toggleSkill(skill)}
+                      animate={animatedSkills.has(skill)}
+                    />
                   ))}
                 </div>
-              </fieldset>
+              </div>
+            )}
 
-              {/* Shift */}
-              <fieldset>
-                <legend className="text-sm font-semibold text-gray-700 mb-2">Shift</legend>
-                <div className="flex flex-wrap gap-4">
-                  {([
-                    ["day", "Day-shift"],
-                    ["night", "Night-shift"],
-                    ["on_call", "On-Call"],
-                  ] as const).map(([val, label]) => (
-                    <label key={val} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                      <input
-                        type="radio"
-                        name="shift"
-                        value={val}
-                        checked={shift === val}
-                        onChange={() => setShift(val)}
-                        className="w-4 h-4 accent-teal"
-                      />
-                      {label}
-                    </label>
+            {/* Optional */}
+            {optionalSkills.length > 0 && (
+              <div>
+                <p className="text-xs text-skGray-desc mb-1.5">Nice to have</p>
+                <div className="flex flex-wrap gap-2">
+                  {optionalSkills.map((skill) => (
+                    <SkillPill
+                      key={`opt-${skill}`}
+                      label={skill}
+                      type="optional"
+                      onRemove={() => removeSkill(skill)}
+                      onToggle={() => toggleSkill(skill)}
+                      animate={animatedSkills.has(skill)}
+                    />
                   ))}
                 </div>
-              </fieldset>
+              </div>
+            )}
 
-              {/* Location */}
-              <fieldset>
-                <legend className="text-sm font-semibold text-gray-700 mb-2">Location</legend>
-                <div className="flex flex-wrap gap-4">
-                  {([
-                    ["on_site", "On-site"],
-                    ["hybrid", "Hybrid"],
-                    ["remote", "Remote"],
-                  ] as const).map(([val, label]) => (
-                    <label key={val} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                      <input
-                        type="radio"
-                        name="location"
-                        value={val}
-                        checked={location === val}
-                        onChange={() => setLocation(val)}
-                        className="w-4 h-4 accent-teal"
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+            {/* Manual add — gray gradient button, differentiated from skill pills */}
+            <div className="mt-4 flex gap-2">
+              <input
+                type="text"
+                value={newSkill}
+                onChange={(e) => setNewSkill(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addManualSkill()}
+                placeholder="Add a skill..."
+                className="flex-1 px-3 py-2 rounded-lg border border-coolgray-200 focus:border-skTeal focus:outline-none text-sm text-gray-800 placeholder:text-skGray-desc"
+              />
+              <button
+                type="button"
+                onClick={addManualSkill}
+                className="px-4 py-2 rounded-xl bg-gradient-to-t from-[#808080] to-[#A2A4A7] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        )}
 
-              {/* Pay */}
-              <fieldset>
-                <legend className="text-sm font-semibold text-gray-700 mb-2">Pay</legend>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={pay}
-                    onChange={(e) => setPay(e.target.value)}
-                    placeholder="ex: $80,000"
-                    className="flex-1 px-4 py-2.5 rounded-xl border-2 border-coolgray-200 focus:border-teal focus:outline-none text-gray-900 placeholder:text-gray-400"
+        {/* ---- Employment details ---- */}
+        {totalSkills > 0 && (
+          <div className="max-w-2xl space-y-5 mb-6 animate-fade-in">
+            {/* Employment type */}
+            <fieldset>
+              <legend className="text-sm font-semibold text-skGray mb-2">Employment</legend>
+              <div className="flex flex-wrap gap-4">
+                {([
+                  ["contract", "Contract"],
+                  ["part_time", "Part-time"],
+                  ["full_time", "Full-time"],
+                ] as const).map(([val, label]) => (
+                  <SkRadio
+                    key={val}
+                    name="employment"
+                    value={val}
+                    checked={employment === val}
+                    onChange={() => setEmployment(val)}
+                    label={label}
                   />
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Shift */}
+            <fieldset>
+              <legend className="text-sm font-semibold text-skGray mb-2">Shift</legend>
+              <div className="flex flex-wrap gap-4">
+                {([
+                  ["day", "Day-shift"],
+                  ["night", "Night-shift"],
+                  ["on_call", "On-Call"],
+                ] as const).map(([val, label]) => (
+                  <SkRadio
+                    key={val}
+                    name="shift"
+                    value={val}
+                    checked={shift === val}
+                    onChange={() => setShift(val)}
+                    label={label}
+                  />
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Location */}
+            <fieldset>
+              <legend className="text-sm font-semibold text-skGray mb-2">Location</legend>
+              <div className="flex flex-wrap gap-4">
+                {([
+                  ["on_site", "On-site"],
+                  ["hybrid", "Hybrid"],
+                  ["remote", "Remote"],
+                ] as const).map(([val, label]) => (
+                  <SkRadio
+                    key={val}
+                    name="location"
+                    value={val}
+                    checked={location === val}
+                    onChange={() => setLocation(val)}
+                    label={label}
+                  />
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Pay */}
+            <fieldset>
+              <legend className="text-sm font-semibold text-skGray mb-2">Pay</legend>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={pay}
+                  onChange={(e) => setPay(e.target.value)}
+                  placeholder="ex: $80,000"
+                  className="flex-1 px-4 py-2.5 rounded-xl border-2 border-skTeal-bright focus:border-[3px] focus:border-skTeal-bright focus:outline-none text-gray-900 placeholder:text-skTeal bg-white"
+                />
+                <div className="relative">
                   <select
                     value={payPeriod}
                     onChange={(e) => setPayPeriod(e.target.value as "year" | "month" | "hour")}
-                    className="px-4 py-2.5 rounded-xl bg-teal text-white font-medium border-0 cursor-pointer appearance-none text-center min-w-[90px]"
+                    className="px-4 pr-10 py-2.5 rounded-xl bg-skTeal text-white font-semibold border-0 cursor-pointer appearance-none min-w-[110px]"
                   >
                     <option value="year">/year</option>
                     <option value="month">/month</option>
                     <option value="hour">/hour</option>
                   </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white"
+                  />
                 </div>
-              </fieldset>
-            </div>
-          )}
+              </div>
+            </fieldset>
+          </div>
+        )}
 
-          {/* ---- Stats line ---- */}
-          {totalSkills > 0 && candidateCount > 0 && (
-            <p className="text-sm text-gray-400 mb-5">
-              ~{candidateCount} candidates
-              {payNum > 0 && (
-                <span>
-                  {" "}&bull; avg ${Math.round(hourlyLow)}&ndash;${Math.round(hourlyHigh)}/hr
-                </span>
-              )}
-            </p>
-          )}
+        {/* ---- Stats line ---- */}
+        {totalSkills > 0 && candidateCount > 0 && (
+          <p className="max-w-2xl text-sm text-skGray-desc mb-5">
+            ~{candidateCount} candidates
+            {payNum > 0 && (
+              <span>
+                {" "}&bull; avg ${Math.round(hourlyLow)}&ndash;${Math.round(hourlyHigh)}/hr
+              </span>
+            )}
+          </p>
+        )}
 
-          {/* ---- CTA ---- */}
+        {/* ---- CTA ---- */}
+        <div className="max-w-2xl">
           <button
             type="button"
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className={`w-full py-3.5 rounded-full text-white font-semibold text-base transition-all flex items-center justify-center gap-2.5 ${
+            className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-base transition-all flex items-center justify-between ${
               canSubmit
-                ? "bg-teal hover:bg-teal-dark shadow-md hover:shadow-lg cursor-pointer"
+                ? "bg-gradient-to-r from-[#01D6FF] to-[#09C8C8] hover:opacity-95 shadow-md hover:shadow-lg cursor-pointer"
                 : "bg-coolgray-200 text-gray-400 cursor-not-allowed"
             }`}
+            style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
           >
-            See Candidates
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/forward-arrow.png" alt="" width={18} height={18} aria-hidden="true" />
+            <span className="text-left">See Candidates</span>
+            <ArrowRight size={20} className="text-white" aria-hidden="true" />
           </button>
         </div>
+
+        {/* Toast */}
+        {shareToast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-skGray text-white text-sm font-medium shadow-lg animate-fade-in">
+            {shareToast}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -606,7 +734,7 @@ export default function PostJobPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-coolgray-50 flex items-center justify-center">
-          <div className="w-8 h-8 border-3 border-teal border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-skTeal border-t-transparent rounded-full animate-spin" />
         </div>
       }
     >

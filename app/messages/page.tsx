@@ -113,19 +113,16 @@ const THREADS: Thread[] = [
   },
 ];
 
-const AVATAR_COLORS = [
-  "#00BFA5",
-  "#26A69A",
-  "#1DB1A8",
-  "#3DBDB0",
-  "#0FB7A8",
-  "#1ABFAB",
-];
-
-function avatarColor(handle: string): string {
-  let sum = 0;
-  for (let i = 0; i < handle.length; i++) sum += handle.charCodeAt(i);
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+// Caroline's feedback (5/12): split candidates into TOP MATCH (blue) and
+// CLOSE MATCH (green). We don't have a hard top/close field on threads,
+// so derive: anyone actively engaged (Interview Scheduled / Responded /
+// Reviewing Offer) is treated as a top match; the rest are close matches.
+function isTopMatch(status: ThreadStatus): boolean {
+  return (
+    status === "Interview Scheduled" ||
+    status === "Responded" ||
+    status === "Reviewing Offer"
+  );
 }
 
 function statusBadgeClasses(status: ThreadStatus): string {
@@ -133,11 +130,13 @@ function statusBadgeClasses(status: ThreadStatus): string {
     case "Interview Scheduled":
       return "bg-yellow-100 text-yellow-700";
     case "Responded":
-      return "bg-teal/15 text-teal";
+      return "bg-skTeal-bright/15 text-skBlue-light";
     case "Not Responded":
-      return "bg-gray-200 text-gray-600";
+      // Caroline: "We don't want to show 'Not Responded', prefer to show
+      // nothing instead." Returning an empty class hides the badge.
+      return "hidden";
     case "Reviewing Offer":
-      return "bg-green-100 text-green-700";
+      return "bg-skGreen/15 text-skGreen";
   }
 }
 
@@ -344,6 +343,10 @@ export default function MessagesPage() {
             {filtered.map((t) => {
               const isExpanded = expanded === t.id;
               const initials = t.handle.slice(0, 2).toUpperCase();
+              // Tier the candidate: top match (engaged) gets bright blue
+              // #01D6FF, close match (silent) gets green #05D6AE
+              const top = isTopMatch(t.status);
+              const tierColor = top ? "#01D6FF" : "#05D6AE";
               return (
                 <li key={t.id}>
                   <button
@@ -351,11 +354,11 @@ export default function MessagesPage() {
                     onClick={() => setExpanded(isExpanded ? null : t.id)}
                     className="w-full text-left px-4 sm:px-6 py-4 flex items-start gap-4 hover:bg-gray-50 transition"
                   >
-                    {/* Avatar */}
+                    {/* Avatar — blue for top match, green for close match */}
                     <div
                       className="rounded-xl flex items-center justify-center text-white font-bold shrink-0"
                       style={{
-                        background: avatarColor(t.handle),
+                        background: tierColor,
                         width: 50,
                         height: 50,
                       }}
@@ -368,7 +371,7 @@ export default function MessagesPage() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span
                           className="font-bold"
-                          style={{ color: TEAL }}
+                          style={{ color: tierColor }}
                         >
                           {t.handle}
                         </span>

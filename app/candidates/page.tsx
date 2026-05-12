@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ChevronDown, Check, ArrowRight, X } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, Check, ArrowRight, X, Star } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
 
 interface CandidateRow {
   handle: string;
-  match: string; // for top: "✓"; for close: "11/12"
+  match: string; // for top: "check"; for close: "11/12"
   extra: string; // "+5", "+4", "+0"
   availability: string; // "now", "In 3 weeks" etc.
 }
@@ -41,53 +41,63 @@ const EXTRA_SKILL_DETAILS = [
   "Risk Management",
 ];
 
-const DEFAULT_TIME_SLOTS = [
-  "Tue, Apr 28 • 2:00 PM",
-  "Wed, Apr 29 • 10:30 AM",
-  "Thu, Apr 30 • 4:00 PM",
-];
+function AvailabilityCell({ value }: { value: string }) {
+  if (value === "now") {
+    return (
+      <span className="inline-flex items-center">
+        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
+        now
+      </span>
+    );
+  }
+  return <>{value}</>;
+}
 
-export default function CandidatesPage() {
+function CandidatesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [jobTitle, setJobTitle] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [inviteCandidate, setInviteCandidate] = useState<CandidateRow | null>(
     null
   );
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [slot1, setSlot1] = useState("");
+  const [slot2, setSlot2] = useState("");
+  const [slot3, setSlot3] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
 
   useEffect(() => {
+    const urlRole = searchParams?.get("role");
     const saved = localStorage.getItem("skillmatch_job");
-    if (!saved) {
+
+    if (!saved && !urlRole) {
       router.push("/post-job");
       return;
     }
     try {
-      const job = JSON.parse(saved);
-      setJobTitle(
-        job.selectedRole ||
-          job.roleInput ||
-          "Design Director — Construction/Architecture"
-      );
+      if (saved) {
+        const job = JSON.parse(saved);
+        const fromStorage = job.selectedRole || job.roleInput || job.role || "";
+        if (fromStorage) {
+          setJobTitle(fromStorage);
+          return;
+        }
+      }
+      if (urlRole) {
+        setJobTitle(urlRole);
+        return;
+      }
+      setJobTitle("");
     } catch {
-      setJobTitle("Design Director — Construction/Architecture");
+      setJobTitle(urlRole || "");
     }
-  }, [router]);
-
-  function toggleSlot(slot: string) {
-    setSelectedSlots((prev) =>
-      prev.includes(slot)
-        ? prev.filter((s) => s !== slot)
-        : prev.length >= 3
-          ? prev
-          : [...prev, slot]
-    );
-  }
+  }, [router, searchParams]);
 
   function openInvite(c: CandidateRow) {
     setInviteCandidate(c);
-    setSelectedSlots([]);
+    setSlot1("");
+    setSlot2("");
+    setSlot3("");
     setInviteMessage("");
   }
 
@@ -102,35 +112,43 @@ export default function CandidatesPage() {
   ) {
     const key = `${section}-${idx}-${c.handle}`;
     const isExpanded = expandedKey === key;
+    const handleColor = section === "top" ? "text-skTeal" : "text-skGray";
     const matchCol =
       c.match === "check" ? (
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal/10 text-teal">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-skTeal/10 text-skTeal">
           <Check size={16} strokeWidth={3} />
         </span>
       ) : (
-        <span className="font-bold text-gray-700">{c.match}</span>
+        <span className="font-bold text-skGray">{c.match}</span>
       );
 
     return (
       <div
         key={key}
         className={`border-b border-gray-100 last:border-0 ${
-          isExpanded ? "bg-teal/5" : ""
+          isExpanded ? "bg-skBeta-bg" : ""
         }`}
       >
         {/* Desktop row */}
         <button
           onClick={() => setExpandedKey(isExpanded ? null : key)}
-          className="hidden md:grid w-full grid-cols-[40%_15%_15%_30%] items-center px-6 py-4 text-left hover:bg-teal/5 transition-colors cursor-pointer"
+          className="hidden md:grid w-full grid-cols-[40%_15%_15%_30%] items-center px-6 py-4 text-left hover:bg-skBeta-bg transition-colors cursor-pointer"
         >
-          <div className="font-bold text-teal">{c.handle}</div>
+          <div
+            className={`font-bold ${handleColor}`}
+            style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+          >
+            {c.handle}
+          </div>
           <div className="flex items-center">{matchCol}</div>
-          <div className="font-bold text-teal">{c.extra}</div>
+          <div className="font-bold text-skTeal">{c.extra}</div>
           <div className="flex items-center justify-between pr-2">
-            <span className="text-gray-700">{c.availability}</span>
+            <span className="text-skGray">
+              <AvailabilityCell value={c.availability} />
+            </span>
             <ChevronDown
               size={16}
-              className={`text-gray-400 transition-transform ${
+              className={`text-skGray-desc transition-transform ${
                 isExpanded ? "rotate-180" : ""
               }`}
             />
@@ -140,35 +158,42 @@ export default function CandidatesPage() {
         {/* Mobile card */}
         <button
           onClick={() => setExpandedKey(isExpanded ? null : key)}
-          className="md:hidden w-full px-4 py-4 text-left hover:bg-teal/5 transition-colors cursor-pointer"
+          className="md:hidden w-full px-4 py-4 text-left hover:bg-skBeta-bg transition-colors cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="font-bold text-teal">{c.handle}</span>
+            <span
+              className={`font-bold ${handleColor}`}
+              style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+            >
+              {c.handle}
+            </span>
             <ChevronDown
               size={16}
-              className={`text-gray-400 transition-transform ${
+              className={`text-skGray-desc transition-transform ${
                 isExpanded ? "rotate-180" : ""
               }`}
             />
           </div>
           <div className="grid grid-cols-3 gap-2 text-sm">
             <div>
-              <div className="text-xs uppercase text-gray-400 mb-0.5">
-                {section === "top" ? "Match" : "Match"}
+              <div className="text-xs uppercase text-skGray-desc mb-0.5">
+                Match
               </div>
               <div>{matchCol}</div>
             </div>
             <div>
-              <div className="text-xs uppercase text-gray-400 mb-0.5">
+              <div className="text-xs uppercase text-skGray-desc mb-0.5">
                 Extra
               </div>
-              <div className="font-bold text-teal">{c.extra}</div>
+              <div className="font-bold text-skTeal">{c.extra}</div>
             </div>
             <div>
-              <div className="text-xs uppercase text-gray-400 mb-0.5">
+              <div className="text-xs uppercase text-skGray-desc mb-0.5">
                 Available
               </div>
-              <div className="text-gray-700 text-xs">{c.availability}</div>
+              <div className="text-skGray text-xs">
+                <AvailabilityCell value={c.availability} />
+              </div>
             </div>
           </div>
         </button>
@@ -177,39 +202,52 @@ export default function CandidatesPage() {
         {isExpanded && (
           <div className="px-4 md:px-6 pb-6 pt-2">
             <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-6">
-              <p className="text-sm text-gray-700 mb-3">
-                <span className="font-semibold">
+              <p className="text-sm text-skGray mb-3 text-left">
+                <span className="font-semibold text-gray-700">
                   {section === "top"
                     ? "Has all 12 required skills"
                     : `Has ${c.match} required skills`}
                 </span>
-                {" • "}
+                {" + "}
                 {EXTRA_SKILL_DETAILS.join(" • ")}
               </p>
 
-              <button className="text-sm text-teal font-medium hover:underline mb-5">
+              <button className="text-sm text-skTeal font-semibold hover:underline mb-5">
                 + Add a Question
               </button>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-4">
-                <button className="px-6 py-2 rounded-full border border-teal text-teal font-semibold hover:bg-teal/5 transition-colors">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+                {/* Save */}
+                <button
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-skTeal-bright text-skTeal-bright font-bold hover:bg-skBeta-bg transition-colors"
+                  style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+                >
+                  <Star size={16} strokeWidth={2.5} />
                   Save
                 </button>
+
+                {/* Invite to Interview */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     openInvite(c);
                   }}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2 rounded-full bg-teal text-white font-semibold hover:bg-teal/90 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-skTeal text-white font-bold hover:opacity-90 transition-opacity"
+                  style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
                 >
                   Invite to Interview <ArrowRight size={16} />
                 </button>
-                <button className="inline-flex items-center justify-center gap-2 px-6 py-2 rounded-full bg-teal text-white font-semibold hover:bg-teal/90 transition-colors">
-                  Unlock & Hire <ArrowRight size={16} />
+
+                {/* Unlock & Hire */}
+                <button
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-skBlue text-white font-bold hover:opacity-90 transition-opacity"
+                  style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+                >
+                  Unlock &amp; Hire <ArrowRight size={16} />
                 </button>
               </div>
 
-              <p className="text-center text-xs text-gray-500">
+              <p className="text-left text-xs text-skGray-desc">
                 Candidates remain anonymous until you invite or hire.
               </p>
             </div>
@@ -222,13 +260,13 @@ export default function CandidatesPage() {
   return (
     <div className="min-h-screen bg-coolgray-50">
       {/* Teal top bar */}
-      <div className="h-1 bg-teal" />
+      <div className="h-1 bg-skTeal" />
 
       <SkillmatchHeader active="dashboard" messageCount={21} />
       <div className="max-w-5xl mx-auto px-4 pt-4">
         <button
           onClick={() => router.push("/post-job")}
-          className="text-sm text-gray-500 hover:text-teal transition-colors"
+          className="text-sm text-skGray hover:text-skTeal transition-colors"
         >
           ← Edit role
         </button>
@@ -238,15 +276,21 @@ export default function CandidatesPage() {
         {/* Summary bar */}
         <div className="mb-8 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1">
-              {jobTitle || "Design Director — Construction/Architecture"}
+            <h1
+              className="text-xl md:text-2xl font-bold mb-1"
+              style={{
+                color: "#719192",
+                fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif",
+              }}
+            >
+              {jobTitle || "Your role"}
             </h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-skGray-desc">
               ~148 candidates found • Avg market pay: $34-$42/hr
             </p>
           </div>
           <div className="shrink-0">
-            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-teal text-teal font-semibold text-sm hover:bg-teal/5 transition-colors">
+            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-skTeal text-skTeal font-semibold text-sm hover:bg-skBeta-bg transition-colors">
               Openings: 1 <ChevronDown size={16} />
             </button>
           </div>
@@ -255,12 +299,15 @@ export default function CandidatesPage() {
         {/* Top Candidates table */}
         <section className="mb-8">
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="px-4 md:px-6 py-3 bg-teal text-white font-bold text-sm md:text-base">
+            <div className="px-4 md:px-6 py-3 bg-skBlue text-white font-bold text-sm md:text-base">
               Top Candidates (meet all required skills. Ranked by extra skills)
             </div>
 
             {/* Column headers (desktop) */}
-            <div className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div
+              className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
+              style={{ backgroundColor: "#DEFBFF", color: "#719192" }}
+            >
               <div>Candidate</div>
               <div>Top Match</div>
               <div>Extra Skills</div>
@@ -276,12 +323,15 @@ export default function CandidatesPage() {
         {/* Close Matches table */}
         <section className="mb-8">
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="px-4 md:px-6 py-3 bg-teal text-white font-bold text-sm md:text-base">
+            <div className="px-4 md:px-6 py-3 bg-skGreen text-white font-bold text-sm md:text-base">
               Close Matches (missing some required skills)
             </div>
 
             {/* Column headers (desktop) */}
-            <div className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div
+              className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
+              style={{ backgroundColor: "#DEFCE8", color: "#719192" }}
+            >
               <div>Candidate</div>
               <div>Match</div>
               <div>Extra Skills</div>
@@ -295,61 +345,63 @@ export default function CandidatesPage() {
         </section>
       </main>
 
-      {/* Invite to Interview Modal */}
+      {/* Invite to Interview Modal — teal, feels like a game not a form */}
       {inviteCandidate && (
         <div
           className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
           onClick={closeInvite}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+            className="bg-skTeal rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 md:p-8">
+            <div className="p-6 md:p-8 text-white">
               <div className="flex items-start justify-between mb-1">
-                <h2 className="text-xl font-bold text-gray-900">
+                <h2
+                  className="text-xl font-bold text-white"
+                  style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+                >
                   Invite {inviteCandidate.handle} to Interview
                 </h2>
                 <button
                   onClick={closeInvite}
-                  className="text-gray-400 hover:text-gray-700 transition-colors"
+                  className="text-white/80 hover:text-white transition-colors"
                   aria-label="Close"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mb-6">
-                Match all required skills • +5 extra skills • Available now
+              <p className="text-sm text-white/90 mb-6">
+                Match all required skills • {inviteCandidate.extra} extra skills • Available{" "}
+                {inviteCandidate.availability}
               </p>
 
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Select interview times (choose 3):
+              <h3 className="font-semibold text-white mb-3">
+                Pick 3 times that work for you:
               </h3>
 
-              <div className="flex flex-col gap-2 mb-3">
-                {DEFAULT_TIME_SLOTS.map((slot) => {
-                  const selected = selectedSlots.includes(slot);
-                  return (
-                    <button
-                      key={slot}
-                      onClick={() => toggleSlot(slot)}
-                      className={`px-4 py-2.5 rounded-full text-sm font-medium text-left border transition-colors ${
-                        selected
-                          ? "bg-teal text-white border-teal"
-                          : "bg-white text-gray-700 border-gray-300 hover:border-teal hover:text-teal"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  );
-                })}
+              <div className="flex flex-col gap-3 mb-6">
+                {[
+                  { label: "Slot 1", value: slot1, set: setSlot1 },
+                  { label: "Slot 2", value: slot2, set: setSlot2 },
+                  { label: "Slot 3", value: slot3, set: setSlot3 },
+                ].map((s) => (
+                  <div key={s.label} className="flex flex-col">
+                    <label className="text-xs font-semibold text-white/90 mb-1">
+                      {s.label}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={s.value}
+                      onChange={(e) => s.set(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl text-sm font-medium text-white placeholder:text-white/70 focus:outline-none focus:ring-2 focus:ring-white/40 border border-white/20"
+                      style={{ backgroundColor: "#04AFAA", colorScheme: "dark" }}
+                    />
+                  </div>
+                ))}
               </div>
 
-              <button className="text-sm text-teal font-medium hover:underline mb-6">
-                + Add another time
-              </button>
-
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <label className="block text-sm font-semibold text-white mb-2">
                 Optional Message (Recommended)
               </label>
               <textarea
@@ -357,17 +409,28 @@ export default function CandidatesPage() {
                 onChange={(e) => setInviteMessage(e.target.value)}
                 placeholder="We'd love to speak with you about this role..."
                 rows={4}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:border-teal text-sm resize-none mb-6"
+                className="w-full px-4 py-3 rounded-xl text-sm resize-none mb-6 text-white placeholder:text-white/70 focus:outline-none focus:ring-2 focus:ring-white/40 border border-white/20"
+                style={{ backgroundColor: "#04AFAA" }}
               />
 
               <div className="flex items-center justify-end gap-3">
                 <button
                   onClick={closeInvite}
-                  className="px-5 py-2 rounded-full text-gray-600 font-semibold hover:bg-gray-100 transition-colors"
+                  className="px-5 py-2.5 rounded-xl text-white font-bold transition-opacity hover:opacity-90"
+                  style={{
+                    backgroundColor: "#45D6D2",
+                    fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif",
+                  }}
                 >
                   Cancel
                 </button>
-                <button className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-teal text-white font-semibold hover:bg-teal/90 transition-colors">
+                <button
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold transition-opacity hover:opacity-90"
+                  style={{
+                    backgroundColor: "#01D6FF",
+                    fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif",
+                  }}
+                >
                   Send Invite <ArrowRight size={16} />
                 </button>
               </div>
@@ -376,5 +439,19 @@ export default function CandidatesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CandidatesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-coolgray-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-skTeal border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <CandidatesContent />
+    </Suspense>
   );
 }

@@ -30,9 +30,37 @@ const config: Config = {
           DEFAULT: "#4CAF50",
           dark: "#388E3C",
         },
+        // Caroline's brand tokens (May 2026)
+        skTeal: {
+          bright: "#01D6FF",
+          light: "#09C8C8",
+          title: "#09C8C8",
+          DEFAULT: "#09C8C8",
+        },
+        skBlue: {
+          DEFAULT: "#20B1D3",
+          light: "#06B3C0",
+        },
+        skGreen: {
+          DEFAULT: "#05D6AE",
+        },
+        skBeta: {
+          bg: "#F1FFFF",
+          text: "#06B3C0",
+        },
+        skGray: {
+          DEFAULT: "#719192",
+          desc: "#A2A4A7",
+        },
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        // Inter loaded via Next/Font; Open Sans is the design intent
+        sans: [
+          "var(--font-inter)",
+          "Open Sans",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       keyframes: {
         "pill-pop": {
