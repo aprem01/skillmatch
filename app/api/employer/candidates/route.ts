@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { classifySkillCluster } from "@/lib/taxonomy";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,14 @@ export async function POST(req: Request) {
       optionalSkills || []
     );
 
+    // Caroline 5/22: cluster check on the recruiter's basket. Surfaces
+    // industry-incoherent searches (e.g. "Solar Panel Installation" +
+    // "Patient Care") in analytics so we can spot bad rolldefs early.
+    const cluster = classifySkillCluster([
+      ...(requiredSkills || []),
+      ...(optionalSkills || []),
+    ]);
+
     void logEvent("employer_candidate_search", {
       role: role || null,
       requiredSkillCount: (requiredSkills || []).length,
@@ -33,11 +42,21 @@ export async function POST(req: Request) {
       requiredSkills: (requiredSkills || []).slice(0, 12),
       candidatesReturned: mockCandidates.length,
       perfectMatches: mockCandidates.filter((c) => c.matchScore >= 90).length,
+      clusterIndustry: cluster.industry,
+      clusterConfidence: cluster.confidence,
+      clusterOutliers: cluster.outliers,
+      clusterUnknown: cluster.unknown,
       durationMs: Date.now() - startTime,
       isEmpty: mockCandidates.length === 0,
     });
 
-    return NextResponse.json({ candidates: mockCandidates });
+    return NextResponse.json({
+      candidates: mockCandidates,
+      cluster: {
+        industry: cluster.industry,
+        confidence: cluster.confidence,
+      },
+    });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown";
     void logEvent("employer_candidate_search", {

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { classifySkillCluster } from "@/lib/taxonomy";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,13 @@ Rules:
       .replace(/\n?```\s*$/i, "")
       .trim();
 
-    let parsed: { variants?: { title: string }[] };
+    let parsed: {
+      variants?: {
+        title: string;
+        requiredSkills?: string[];
+        optionalSkills?: string[];
+      }[];
+    };
     try {
       parsed = JSON.parse(text);
     } catch {
@@ -81,14 +88,32 @@ Rules:
       return NextResponse.json({ variants: [] });
     }
 
+    // Caroline 5/22: tag each role variant with its dominant industry,
+    // computed by clustering its required + optional skills. The candidates
+    // page can show this as a vertical badge and the matcher uses it to
+    // block cross-vertical leaks (warehouse-manager → physician).
+    const enrichedVariants = (parsed.variants || []).map((v) => {
+      const allSkills = [
+        ...(v.requiredSkills || []),
+        ...(v.optionalSkills || []),
+      ];
+      const cluster = classifySkillCluster(allSkills);
+      return {
+        ...v,
+        industry: cluster.industry,
+        industryConfidence: cluster.confidence,
+      };
+    });
+
     void logEvent("employer_role_search", {
       query,
-      variantCount: parsed.variants?.length || 0,
-      variantTitles: parsed.variants?.map((v) => v.title) || [],
+      variantCount: enrichedVariants.length,
+      variantTitles: enrichedVariants.map((v) => v.title),
+      industries: enrichedVariants.map((v) => v.industry),
       durationMs: Date.now() - startTime,
     });
 
-    return NextResponse.json(parsed);
+    return NextResponse.json({ ...parsed, variants: enrichedVariants });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown";
     void logEvent("employer_role_search", {
