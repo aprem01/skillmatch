@@ -161,7 +161,7 @@ function SkillPill({
       type="button"
       onClick={onToggle}
       className={`${bg} text-white text-sm font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 cursor-pointer transition-colors hover:opacity-90 ${animate ? "animate-pill-pop" : ""}`}
-      title={type === "required" ? "Click to make optional" : "Click to make required"}
+      title={type === "required" ? "Click to make extra" : "Click to make required"}
     >
       {label}
       <span
@@ -364,7 +364,10 @@ function PostJobContent() {
       return;
     }
     setAnimatedSkills(new Set([trimmed]));
-    setOptionalSkills((s) => [...s, trimmed]);
+    // Caroline 5/22: manually added skills are more likely Required than
+    // Extra — if the recruiter typed it, they meant it. They can toggle
+    // it to Extra by clicking the pill.
+    setRequiredSkills((s) => [...s, trimmed]);
     setNewSkill("");
     setTimeout(() => setAnimatedSkills(new Set()), 500);
   };
@@ -442,7 +445,7 @@ function PostJobContent() {
 
   return (
     <div className="min-h-screen bg-coolgray-50">
-      <SkillmatchHeader active="dashboard" messageCount={21} />
+      <SkillmatchHeader messageCount={21} />
 
       <main className="max-w-5xl mx-auto px-6 pb-16">
         {/* Headline + subhead sit directly on the gray page background */}
@@ -506,8 +509,8 @@ function PostJobContent() {
 
         {/* ---- Share with team (above Skills Basket) ---- */}
         {totalSkills > 0 && (
-          <div className="max-w-2xl mb-3 flex items-center justify-between">
-            <p className="text-xs text-skGray-desc">
+          <div className="max-w-2xl mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm sm:text-base text-skGray-desc">
               Not sure on skills? Share this with your hiring manager.
             </p>
             <button
@@ -525,7 +528,7 @@ function PostJobContent() {
         {totalSkills > 0 && (
           <div className="max-w-2xl bg-white rounded-2xl shadow-sm border border-coolgray-200 p-5 sm:p-6 mb-6 animate-fade-in">
             <p className="text-xs font-semibold text-skGray uppercase tracking-wide mb-3">
-              Skills &mdash; click to toggle required/optional
+              Skills &mdash; click to toggle required/extra
             </p>
 
             {/* Required */}
@@ -547,10 +550,11 @@ function PostJobContent() {
               </div>
             )}
 
-            {/* Optional */}
+            {/* Extra (aka Optional / Nice-to-have — unified label across
+                candidates list per Caroline 5/22 feedback) */}
             {optionalSkills.length > 0 && (
               <div>
-                <p className="text-xs text-skGray-desc mb-1.5">Nice to have</p>
+                <p className="text-xs text-skGray-desc mb-1.5">Nice-to-have Extra Skills</p>
                 <div className="flex flex-wrap gap-2">
                   {optionalSkills.map((skill) => (
                     <SkillPill

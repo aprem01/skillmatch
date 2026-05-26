@@ -261,9 +261,36 @@ function Dot({ color, outline = false }: { color: string; outline?: boolean }) {
 export default function DashboardPage() {
   const [tab, setTab] = useState<"open" | "closed">("open");
   const [search, setSearch] = useState("");
-  const [expandedOpen, setExpandedOpen] = useState<string | null>(OPEN_JOBS[0].id);
+  // Caroline 5/22: dashboard opens with all jobs collapsed — recruiter
+  // scans the list, expands what they want.
+  const [expandedOpen, setExpandedOpen] = useState<string | null>(null);
   const [expandedClosed, setExpandedClosed] = useState<string | null>(null);
   const [skillsModalJob, setSkillsModalJob] = useState<OpenJob | null>(null);
+
+  // Caroline 5/22: clicking the arrow next to "N candidates awaiting
+  // response" opens a small modal listing the awaiting candidates by
+  // handle; selecting one routes to /messages with that thread open.
+  // Handles are synthetic for MVP — real data wiring lives in the
+  // /api/employer/messages route on the backend.
+  const [awaitingFor, setAwaitingFor] = useState<OpenJob | null>(null);
+
+  // Synthetic candidate handles per job. Stable per-job so the modal
+  // feels real; real backend will return the actual awaiting candidates.
+  function awaitingHandles(job: OpenJob): string[] {
+    const POOL = [
+      "KeqJLS",
+      "JoeMy395",
+      "MuuYu301",
+      "Foaky222",
+      "Tosds403",
+      "SeDo130",
+      "ZesRe501",
+    ];
+    const n = job.awaitingResponse || 0;
+    // Seed pick from job id so it's stable across renders
+    const seed = job.id.charCodeAt(job.id.length - 1) % POOL.length;
+    return Array.from({ length: n }, (_, i) => POOL[(seed + i) % POOL.length]);
+  }
 
   const filteredOpen = useMemo(() => {
     if (!search.trim()) return OPEN_JOBS;
@@ -462,7 +489,21 @@ export default function DashboardPage() {
                             {job.pay} • {job.type} • {job.location}
                           </div>
                           {job.awaitingResponse ? (
-                            <div className="flex items-center mt-2 text-xs text-gray-500">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAwaitingFor(job);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.stopPropagation();
+                                  setAwaitingFor(job);
+                                }
+                              }}
+                              className="flex items-center mt-2 text-xs text-gray-500 hover:text-skTeal transition-colors cursor-pointer"
+                            >
                               <AlertCircle
                                 className="w-3.5 h-3.5 mr-1.5"
                                 style={{ color: AMBER }}
@@ -472,7 +513,7 @@ export default function DashboardPage() {
                               <span>
                                 {job.awaitingResponse} candidates awaiting response
                               </span>
-                              <span className="ml-2 inline-flex items-center bg-gray-300 text-white rounded px-1.5 py-0.5 text-[10px]">
+                              <span className="ml-2 inline-flex items-center bg-gray-300 text-white rounded px-1.5 py-0.5 text-[10px] hover:bg-skTeal transition-colors">
                                 <svg
                                   width="10"
                                   height="10"
@@ -800,6 +841,66 @@ export default function DashboardPage() {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Awaiting-candidates handle picker — Caroline 5/22.
+          Lists the N candidates whose responses are pending for this job;
+          selecting one routes to Messages with that thread surfaced. */}
+      {awaitingFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Candidates awaiting response"
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setAwaitingFor(null)}
+          />
+          <div
+            className="relative bg-white rounded-2xl shadow-xl border-2 w-full max-w-sm p-5"
+            style={{ borderColor: TEAL }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-gray-800 text-sm">
+                {awaitingFor.awaitingResponse} candidates awaiting your response
+              </h2>
+              <button
+                onClick={() => setAwaitingFor(null)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">{awaitingFor.title}</p>
+            <ul className="flex flex-col gap-1.5 mb-2">
+              {awaitingHandles(awaitingFor).map((h) => (
+                <li key={h}>
+                  <Link
+                    href={`/messages?thread=${encodeURIComponent(h)}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-skBeta-bg transition-colors group"
+                  >
+                    <span
+                      className="font-bold text-sm"
+                      style={{ color: TEAL }}
+                    >
+                      {h}
+                    </span>
+                    <span className="text-xs text-gray-400 group-hover:text-skTeal">
+                      Open thread →
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-gray-400 italic mt-2">
+              Handles stay anonymous until you unlock or hire.
+            </p>
           </div>
         </div>
       )}

@@ -21,10 +21,10 @@ export default function SkillmatchHeader({
   return (
     <header className="bg-white border-b border-gray-100 py-5 px-6">
       <div className="max-w-5xl mx-auto flex items-center justify-between">
-        <Link href="/dashboard">
+        <Link href="/">
           <Image
             src="/skillmatch-logo.png"
-            alt="Skillmatch"
+            alt="Skilmatch"
             width={180}
             height={42}
             priority

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 const valueProps = [
   {
@@ -61,10 +61,13 @@ export default function Home() {
       <main className="max-w-5xl mx-auto px-6 pb-20">
         {/* Hero — sits directly on gray page background (no white card) */}
         <section className="pt-10 sm:pt-14">
-          <h1 className="text-3xl sm:text-4xl font-bold text-skGray leading-tight max-w-3xl">
+          {/* Caroline 5/22: sizes tuned one notch down so neither headline
+              nor subhead orphans a single word onto a second line on a
+              standard desktop viewport. */}
+          <h1 className="text-2xl sm:text-[2rem] lg:text-4xl font-bold text-skGray leading-tight max-w-4xl">
             Find the best candidates for any job — instantly.
           </h1>
-          <p className="mt-4 text-base sm:text-lg font-semibold text-skGray max-w-2xl">
+          <p className="mt-4 text-sm sm:text-base lg:text-lg font-semibold text-skGray max-w-3xl">
             Enter a job title or skills — we&apos;ll match you with the best
             candidates in seconds.
           </p>
@@ -97,15 +100,18 @@ export default function Home() {
           </p>
         </section>
 
-        {/* Value Props — ONLY white-background section, left-aligned text */}
+        {/* Value Props — ONLY white-background section.
+            Caroline 5/22: on mobile the icon centers above the title and
+            the whole text block (flush-left internally) is horizontally
+            centered. Desktop keeps the 5-column flush-left layout. */}
         <section className="mt-14 bg-white rounded-2xl shadow-sm px-6 py-10 sm:px-10 sm:py-12">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 place-items-center lg:place-items-start">
             {valueProps.map((prop) => (
               <div
                 key={prop.title}
-                className="flex flex-col items-start text-left max-w-[14rem]"
+                className="flex flex-col items-center lg:items-start text-left max-w-[14rem]"
               >
-                <div className="w-14 h-14 flex items-center justify-start mb-4">
+                <div className="w-14 h-14 flex items-center justify-center lg:justify-start mb-4">
                   <Image
                     src={prop.icon}
                     alt=""
@@ -160,26 +166,27 @@ export default function Home() {
               <span className="text-sm sm:text-base font-semibold text-skGray">
                 {row}
               </span>
+              {/* Caroline 5/22: placeholder check + cross pills.
+                  Swap to her supplied PNGs when assets land. */}
               <div className="flex justify-center">
-                <Image
-                  src="/icon-checkmark.png"
-                  alt="Included"
-                  width={24}
-                  height={24}
-                />
+                <div className="w-7 h-7 rounded-full bg-skTeal-bright flex items-center justify-center">
+                  <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                </div>
               </div>
               <div className="flex justify-center">
-                <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                  <X className="w-4 h-4 text-red-400" strokeWidth={2.5} />
+                <div className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center">
+                  <X className="w-4 h-4 text-white" strokeWidth={3} />
                 </div>
               </div>
             </div>
           ))}
         </section>
 
-        {/* Footer tagline — left-aligned */}
-        <p className="mt-12 mb-12 text-left font-bold text-skGray text-base sm:text-lg max-w-3xl">
-          Skillmatch doesn&apos;t just find better candidates — it helps create
+        {/* Footer tagline — Caroline 5/22: one-L Skilmatch + bumped size.
+            (Was text-base/lg max-w-3xl; now lg/2xl so it sits on the page
+            with more weight.) */}
+        <p className="mt-12 mb-12 text-left font-bold text-skGray text-lg sm:text-2xl max-w-4xl leading-snug">
+          Skilmatch doesn&apos;t just find better candidates — it helps create
           them.
         </p>
       </main>

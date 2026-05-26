@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, Plus, Search } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, ChevronDown, Search, X } from "lucide-react";
 
 type ThreadStatus =
   | "Interview Scheduled"
@@ -214,8 +215,7 @@ function ActionButtons({ status }: { status: ThreadStatus }) {
         className="inline-flex items-center gap-1 text-sm font-semibold hover:underline"
         style={{ color: TEAL }}
       >
-        <Plus className="w-3.5 h-3.5" strokeWidth={3} />
-        Add a Question
+        Ask a Question
       </button>
       <button
         type="button"
@@ -235,9 +235,45 @@ function ActionButtons({ status }: { status: ThreadStatus }) {
   );
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // New-message modal state. Caroline 5/22: candidates page "Ask a Question"
+  // routes here with ?new=<handle>&subject=<text>; we open the modal,
+  // prefill To + Subject, then let the recruiter type a message.
+  const [newTo, setNewTo] = useState<string | null>(null);
+  const [newSubject, setNewSubject] = useState("");
+  const [newBody, setNewBody] = useState("");
+  const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    const to = searchParams?.get("new");
+    if (!to) return;
+    const subject = searchParams?.get("subject") || "";
+    setNewTo(to);
+    setNewSubject(subject);
+    setNewBody("");
+    setSent(false);
+  }, [searchParams]);
+
+  function closeNew() {
+    setNewTo(null);
+    setNewSubject("");
+    setNewBody("");
+    setSent(false);
+    // Clear the query params so reopening this page doesn't reopen the modal
+    router.replace("/messages");
+  }
+
+  function sendNew() {
+    // MVP: no real send. We flag sent so the recruiter sees confirmation,
+    // then auto-close after a beat.
+    setSent(true);
+    setTimeout(closeNew, 1200);
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return THREADS;
@@ -427,6 +463,81 @@ export default function MessagesPage() {
         </div>
       </main>
 
+      {/* New Message modal — opens when navigated with ?new=<handle> */}
+      {newTo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <h2 className="text-base font-bold text-gray-900">New Message</h2>
+              <button
+                onClick={closeNew}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                  To
+                </label>
+                <div className="px-3 py-2 rounded-lg bg-gray-100 text-sm font-bold text-gray-800">
+                  {newTo}{" "}
+                  <span className="font-normal text-gray-500 italic">
+                    (anonymous handle)
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={newSubject}
+                  onChange={(e) => setNewSubject(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:outline-none focus:border-skTeal text-sm"
+                  placeholder="What's this about?"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                  Message
+                </label>
+                <textarea
+                  value={newBody}
+                  onChange={(e) => setNewBody(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:outline-none focus:border-skTeal text-sm resize-none"
+                  placeholder="Write your question or message…"
+                />
+              </div>
+              {sent && (
+                <p className="text-sm font-semibold text-skGreen">
+                  Sent! The candidate will see this in their inbox.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-5 py-3 bg-gray-50 border-t border-gray-200">
+              <button
+                onClick={closeNew}
+                className="px-4 py-2 rounded-full text-sm font-bold text-gray-600 bg-gray-200 hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendNew}
+                disabled={!newBody.trim() || sent}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-bold text-white bg-skTeal hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Send <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         @keyframes fadeIn {
           from {
@@ -443,5 +554,19 @@ export default function MessagesPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-coolgray-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-skTeal border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
   );
 }

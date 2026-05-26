@@ -4,6 +4,12 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Check, ArrowRight, X, Star } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
+import RecruiterVerificationModal, {
+  isRecruiterVerified,
+} from "@/components/RecruiterVerificationModal";
+import SubscriptionModal, {
+  isSubscribed,
+} from "@/components/SubscriptionModal";
 
 interface CandidateRow {
   handle: string;
@@ -53,6 +59,11 @@ function AvailabilityCell({ value }: { value: string }) {
   return <>{value}</>;
 }
 
+type GatedAction =
+  | { kind: "invite"; candidate: CandidateRow }
+  | { kind: "ask"; candidate: CandidateRow }
+  | { kind: "hire"; candidate: CandidateRow };
+
 function CandidatesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,8 +76,22 @@ function CandidatesContent() {
   const [slot2, setSlot2] = useState("");
   const [slot3, setSlot3] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
+  const [savedHandles, setSavedHandles] = useState<Set<string>>(new Set());
+
+  // Gating: invite + ask + hire all require recruiter to be verified AND
+  // subscribed. We hold the intended action while the modals run, then
+  // replay it once both gates pass.
+  const [pendingAction, setPendingAction] = useState<GatedAction | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
 
   useEffect(() => {
+    const savedSet = localStorage.getItem("skillmatch_saved");
+    if (savedSet) {
+      try {
+        setSavedHandles(new Set(JSON.parse(savedSet)));
+      } catch {}
+    }
     const urlRole = searchParams?.get("role");
     const saved = localStorage.getItem("skillmatch_job");
 
@@ -103,6 +128,75 @@ function CandidatesContent() {
 
   function closeInvite() {
     setInviteCandidate(null);
+  }
+
+  function toggleSave(handle: string) {
+    setSavedHandles((prev) => {
+      const next = new Set(prev);
+      if (next.has(handle)) next.delete(handle);
+      else next.add(handle);
+      localStorage.setItem(
+        "skillmatch_saved",
+        JSON.stringify(Array.from(next))
+      );
+      return next;
+    });
+  }
+
+  // Run the pending action once verification + subscription gates pass.
+  function runAction(action: GatedAction) {
+    if (action.kind === "invite") {
+      openInvite(action.candidate);
+    } else if (action.kind === "ask") {
+      router.push(
+        `/messages?new=${encodeURIComponent(action.candidate.handle)}` +
+          `&subject=${encodeURIComponent("Question about " + (jobTitle || "your skills"))}`
+      );
+    } else if (action.kind === "hire") {
+      // Unlock & Hire modal — not yet designed (Caroline 5/22).
+      // For now, just take them to messages with a hire-flavored subject.
+      router.push(
+        `/messages?new=${encodeURIComponent(action.candidate.handle)}` +
+          `&subject=${encodeURIComponent("Offer for " + (jobTitle || "your role"))}`
+      );
+    }
+  }
+
+  // Entry point: route action through verification → subscription gates.
+  function gateAction(action: GatedAction) {
+    if (!isRecruiterVerified()) {
+      setPendingAction(action);
+      setVerifyOpen(true);
+      return;
+    }
+    if (!isSubscribed()) {
+      setPendingAction(action);
+      setSubOpen(true);
+      return;
+    }
+    runAction(action);
+  }
+
+  function handleVerified() {
+    setVerifyOpen(false);
+    if (!isSubscribed()) {
+      setSubOpen(true);
+      return;
+    }
+    if (pendingAction) {
+      const a = pendingAction;
+      setPendingAction(null);
+      runAction(a);
+    }
+  }
+
+  function handleSubscribed() {
+    setSubOpen(false);
+    if (pendingAction) {
+      const a = pendingAction;
+      setPendingAction(null);
+      runAction(a);
+    }
   }
 
   function renderRow(
@@ -212,25 +306,44 @@ function CandidatesContent() {
                 {EXTRA_SKILL_DETAILS.join(" • ")}
               </p>
 
-              <button className="text-sm text-skTeal font-semibold hover:underline mb-5">
-                + Add a Question
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  gateAction({ kind: "ask", candidate: c });
+                }}
+                className="text-sm text-skTeal font-semibold hover:underline mb-5"
+              >
+                Ask a Question
               </button>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
-                {/* Save */}
+                {/* Save — toggleable, fills blue when saved (Caroline 5/22) */}
                 <button
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-skTeal-bright text-skTeal-bright font-bold hover:bg-skBeta-bg transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSave(c.handle);
+                  }}
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 font-bold transition-colors ${
+                    savedHandles.has(c.handle)
+                      ? "bg-skBlue text-white border-skBlue hover:opacity-90"
+                      : "bg-white border-skTeal-bright text-skTeal-bright hover:bg-skBeta-bg"
+                  }`}
                   style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
+                  aria-pressed={savedHandles.has(c.handle)}
                 >
-                  <Star size={16} strokeWidth={2.5} />
-                  Save
+                  <Star
+                    size={16}
+                    strokeWidth={2.5}
+                    fill={savedHandles.has(c.handle) ? "currentColor" : "none"}
+                  />
+                  {savedHandles.has(c.handle) ? "Saved" : "Save"}
                 </button>
 
                 {/* Invite to Interview */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    openInvite(c);
+                    gateAction({ kind: "invite", candidate: c });
                   }}
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-skTeal text-white font-bold hover:opacity-90 transition-opacity"
                   style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
@@ -240,6 +353,10 @@ function CandidatesContent() {
 
                 {/* Unlock & Hire */}
                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    gateAction({ kind: "hire", candidate: c });
+                  }}
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-skBlue text-white font-bold hover:opacity-90 transition-opacity"
                   style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
                 >
@@ -262,7 +379,7 @@ function CandidatesContent() {
       {/* Teal top bar */}
       <div className="h-1 bg-skTeal" />
 
-      <SkillmatchHeader active="dashboard" messageCount={21} />
+      <SkillmatchHeader messageCount={21} />
       <div className="max-w-5xl mx-auto px-4 pt-4">
         <button
           onClick={() => router.push("/post-job")}
@@ -438,6 +555,28 @@ function CandidatesContent() {
           </div>
         </div>
       )}
+
+      {/* Recruiter verification gate — Caroline 5/22.
+          Required before sending an invite, asking a question, or hiring. */}
+      <RecruiterVerificationModal
+        open={verifyOpen}
+        onClose={() => {
+          setVerifyOpen(false);
+          setPendingAction(null);
+        }}
+        onVerified={handleVerified}
+      />
+
+      {/* Subscription gate — Caroline 5/22.
+          Required immediately after verification before the action runs. */}
+      <SubscriptionModal
+        open={subOpen}
+        onClose={() => {
+          setSubOpen(false);
+          setPendingAction(null);
+        }}
+        onSubscribed={handleSubscribed}
+      />
     </div>
   );
 }
