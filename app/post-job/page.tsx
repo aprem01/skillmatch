@@ -4,6 +4,10 @@ import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Share2, ArrowRight } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
+import {
+  classifySkillCluster,
+  needsIndustryClarification,
+} from "@/lib/taxonomy";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data — role variants with pre-populated skills               */
@@ -241,6 +245,13 @@ function PostJobContent() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [newSkill, setNewSkill] = useState("");
   const [animatedSkills, setAnimatedSkills] = useState<Set<string>>(new Set());
+  // Caroline 5/22 sketch: when the recruiter types an ambiguous skill,
+  // ask which industry they meant before adding it to the basket. The
+  // role's basket-classified industry serves as the anchor.
+  const [pendingClarification, setPendingClarification] = useState<{
+    raw: string;
+    industries: string[];
+  } | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -356,6 +367,13 @@ function PostJobContent() {
     }
   };
 
+  const commitManualSkill = (trimmed: string) => {
+    setAnimatedSkills(new Set([trimmed]));
+    setRequiredSkills((s) => [...s, trimmed]);
+    setNewSkill("");
+    setTimeout(() => setAnimatedSkills(new Set()), 500);
+  };
+
   const addManualSkill = () => {
     const trimmed = newSkill.trim();
     if (!trimmed) return;
@@ -363,13 +381,21 @@ function PostJobContent() {
       setNewSkill("");
       return;
     }
-    setAnimatedSkills(new Set([trimmed]));
+    // Ambiguity check: the role's existing basket gives us an anchor.
+    const anchor = classifySkillCluster([
+      ...requiredSkills,
+      ...optionalSkills,
+    ]).industry;
+    const candidates = needsIndustryClarification(trimmed, anchor);
+    if (candidates) {
+      setPendingClarification({ raw: trimmed, industries: candidates });
+      setNewSkill("");
+      return;
+    }
     // Caroline 5/22: manually added skills are more likely Required than
     // Extra — if the recruiter typed it, they meant it. They can toggle
     // it to Extra by clicking the pill.
-    setRequiredSkills((s) => [...s, trimmed]);
-    setNewSkill("");
-    setTimeout(() => setAnimatedSkills(new Set()), 500);
+    commitManualSkill(trimmed);
   };
 
   // --- share link ---
@@ -588,6 +614,38 @@ function PostJobContent() {
                 Add
               </button>
             </div>
+
+            {/* Industry clarification picker (Caroline 5/22 sketch) */}
+            {pendingClarification && (
+              <div className="mt-3 p-3 rounded-xl border-2 border-skTeal/30 bg-skBeta-bg">
+                <p className="text-sm font-semibold text-skGray mb-2">
+                  &ldquo;{pendingClarification.raw}&rdquo; — which industry did you mean?
+                </p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingClarification.industries.map((ind) => (
+                    <button
+                      key={ind}
+                      type="button"
+                      onClick={() => {
+                        const raw = pendingClarification.raw;
+                        setPendingClarification(null);
+                        commitManualSkill(raw);
+                      }}
+                      className="px-3 py-1.5 rounded-full text-sm font-semibold bg-white border-2 border-skTeal text-skTeal hover:bg-skTeal hover:text-white transition-colors"
+                    >
+                      {ind}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingClarification(null)}
+                  className="text-xs text-skGray-desc hover:text-skTeal underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
