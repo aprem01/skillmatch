@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { ChevronDown, Check, ArrowRight, X, Star } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
 import RecruiterVerificationModal, {
@@ -325,17 +326,23 @@ function CandidatesContent() {
                   }}
                   className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 font-bold transition-colors ${
                     savedHandles.has(c.handle)
-                      ? "bg-skBlue text-white border-skBlue hover:opacity-90"
+                      ? "bg-skBeta-bg border-skTeal-bright text-skTeal-bright"
                       : "bg-white border-skTeal-bright text-skTeal-bright hover:bg-skBeta-bg"
                   }`}
                   style={{ fontFamily: "Open Sans, var(--font-inter), system-ui, sans-serif" }}
                   aria-pressed={savedHandles.has(c.handle)}
                 >
-                  <Star
-                    size={16}
-                    strokeWidth={2.5}
-                    fill={savedHandles.has(c.handle) ? "currentColor" : "none"}
-                  />
+                  {savedHandles.has(c.handle) ? (
+                    <Image
+                      src="/icon-star-filled.png"
+                      alt=""
+                      width={18}
+                      height={18}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Star size={16} strokeWidth={2.5} fill="none" />
+                  )}
                   {savedHandles.has(c.handle) ? "Saved" : "Save"}
                 </button>
 

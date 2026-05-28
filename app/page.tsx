@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Check, X } from "lucide-react";
 
 const valueProps = [
   {
@@ -166,17 +165,22 @@ export default function Home() {
               <span className="text-sm sm:text-base font-semibold text-skGray">
                 {row}
               </span>
-              {/* Caroline 5/22: placeholder check + cross pills.
-                  Swap to her supplied PNGs when assets land. */}
+              {/* Caroline-supplied check + cross icons (5/22) */}
               <div className="flex justify-center">
-                <div className="w-7 h-7 rounded-full bg-skTeal-bright flex items-center justify-center">
-                  <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                </div>
+                <Image
+                  src="/icon-checkmark-green.png"
+                  alt="Included"
+                  width={26}
+                  height={26}
+                />
               </div>
               <div className="flex justify-center">
-                <div className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center">
-                  <X className="w-4 h-4 text-white" strokeWidth={3} />
-                </div>
+                <Image
+                  src="/icon-cross-red.png"
+                  alt="Not included"
+                  width={26}
+                  height={26}
+                />
               </div>
             </div>
           ))}
