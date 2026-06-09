@@ -187,6 +187,25 @@ model AnalyticsEvent {
 }
 
 // =====================
+// Recruiter Verification (Skilmatch SaaS — pre-subscription gate)
+// =====================
+
+model RecruiterVerification {
+  id              String    @id @default(cuid())
+  workEmail       String    @unique
+  companyName     String
+  recruiterName   String
+  jobTitle        String
+  companyWebsite  String?
+  status          String    // "pending" | "verified"
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// =====================
 // Recruiter Subscriptions (Skilmatch SaaS)
 // =====================
 

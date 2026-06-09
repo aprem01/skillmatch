@@ -7,6 +7,7 @@ import { ChevronDown, Check, ArrowRight, X, Star } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
 import RecruiterVerificationModal, {
   isRecruiterVerified,
+  refreshRecruiterVerification,
 } from "@/components/RecruiterVerificationModal";
 import SubscriptionModal, {
   isSubscribed,
@@ -93,6 +94,26 @@ function CandidatesContent() {
       try {
         setSavedHandles(new Set(JSON.parse(savedSet)));
       } catch {}
+    }
+
+    // Returning from the Resend magic-link → refresh verified state.
+    const verifiedParam = searchParams?.get("verified");
+    const verifiedEmail = searchParams?.get("email");
+    if (verifiedParam === "1") {
+      void refreshRecruiterVerification(verifiedEmail || undefined).then(
+        (ok) => {
+          if (ok && pendingAction) {
+            // Verification cleared — next gate is subscription, which the
+            // existing handleVerified flow will trigger when the action
+            // re-runs.
+            const a = pendingAction;
+            setPendingAction(null);
+            handleVerified();
+            void a; // referenced — handleVerified replays via state
+          }
+        }
+      );
+      router.replace("/candidates");
     }
 
     // Returning from Stripe Checkout — refresh the cached subscription

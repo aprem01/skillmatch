@@ -49,6 +49,51 @@ export function isRecruiterVerified(): boolean {
   }
 }
 
+/**
+ * Hit /api/recruiter/status to refresh the cached verification state.
+ * Called by the candidates page after the magic-link returns with
+ * ?verified=1.
+ */
+export async function refreshRecruiterVerification(
+  email?: string
+): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  let target = email;
+  if (!target) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) target = (JSON.parse(raw) as VerificationData).workEmail;
+    } catch {}
+  }
+  if (!target) return false;
+  try {
+    const res = await fetch(
+      `/api/recruiter/status?email=${encodeURIComponent(target)}`
+    );
+    const data = await res.json();
+    if (data.verified) {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const merged: VerificationData = raw
+        ? JSON.parse(raw)
+        : ({
+            companyName: "",
+            recruiterName: "",
+            workEmail: target,
+            jobTitle: "",
+            status: "pending",
+            submittedAt: new Date().toISOString(),
+          } as VerificationData);
+      merged.status = "verified";
+      merged.verifiedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return true;
+    }
+    return false;
+  } catch {
+    return isRecruiterVerified();
+  }
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -87,7 +132,7 @@ export default function RecruiterVerificationModal({
     !!emailDomain && PERSONAL_EMAIL_DOMAINS.includes(emailDomain);
   const requiresWebsite = isPersonalEmail;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -107,17 +152,42 @@ export default function RecruiterVerificationModal({
       return;
     }
 
-    // Persist as pending
+    // Persist as pending (client-side cache; the server also writes a
+    // RecruiterVerification row inside the API call below).
     const data: VerificationData = {
       companyName: companyName.trim(),
       recruiterName: recruiterName.trim(),
-      workEmail: workEmail.trim(),
+      workEmail: workEmail.trim().toLowerCase(),
       jobTitle,
       companyWebsite: companyWebsite.trim() || undefined,
       status: "pending",
       submittedAt: new Date().toISOString(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+    // Real send via Resend (server falls back to demo path if RESEND_API_KEY
+    // isn't set — see /api/recruiter/send-verification).
+    try {
+      const res = await fetch("/api/recruiter/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: data.companyName,
+          recruiterName: data.recruiterName,
+          workEmail: data.workEmail,
+          jobTitle: data.jobTitle,
+          companyWebsite: data.companyWebsite,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok && json.error) {
+        setError(json.error);
+        return;
+      }
+    } catch {
+      // Network error — modal still proceeds to email-sent step so the
+      // user can fall back to the demo button.
+    }
 
     setStep("email-sent");
   }
