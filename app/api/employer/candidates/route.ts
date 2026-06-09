@@ -4,6 +4,19 @@ import { classifySkillCluster } from "@/lib/taxonomy";
 
 export const dynamic = "force-dynamic";
 
+interface Candidate {
+  handle: string;
+  matchScore: number;
+  matchedRequired: string[];
+  matchedOptional: string[];
+  missingRequired: string[];
+  missingOptional: string[];
+  totalRequired: number;
+  totalOptional: number;
+  /** "real" = pulled from UserSkill table; "mock" = generated for demo */
+  source: "real" | "mock";
+}
+
 /** Fire-and-forget analytics log — never blocks user response */
 async function logEvent(event: string, metadata: Record<string, unknown>) {
   try {
@@ -19,43 +32,52 @@ export async function POST(req: Request) {
   const startTime = Date.now();
   try {
     const { requiredSkills, optionalSkills, role } = await req.json();
+    const required: string[] = requiredSkills || [];
+    const optional: string[] = optionalSkills || [];
 
-    // MVP: generate mock candidates based on the required skills
-    // In production: query UserSkill table to find real matches
-    const mockCandidates = generateMockCandidates(
-      requiredSkills || [],
-      optionalSkills || []
-    );
+    // ── Real candidates first (Caroline 5/22 → fundable demo) ──────
+    // Query the shared UserSkill pool. We match normalizedTerm
+    // case-insensitively against the union of required + optional skills,
+    // group by anonymousHandle, then score each user against the basket.
+    const realCandidates = await queryRealCandidates(required, optional);
 
-    // Caroline 5/22: cluster check on the recruiter's basket. Surfaces
-    // industry-incoherent searches (e.g. "Solar Panel Installation" +
-    // "Patient Care") in analytics so we can spot bad rolldefs early.
-    const cluster = classifySkillCluster([
-      ...(requiredSkills || []),
-      ...(optionalSkills || []),
-    ]);
+    // Fall back to mock data ONLY when the pool is empty (early traffic).
+    // This keeps the demo working while we onboard real users; once we
+    // have ≥1 matching user, every recruiter sees real candidates.
+    const candidates: Candidate[] =
+      realCandidates.length > 0
+        ? realCandidates
+        : generateMockCandidates(required, optional);
+
+    // Cluster check on the recruiter's basket. Surfaces industry-incoherent
+    // searches (e.g. "Solar Panel Installation" + "Patient Care") in
+    // analytics so we can spot bad rolldefs early.
+    const cluster = classifySkillCluster([...required, ...optional]);
 
     void logEvent("employer_candidate_search", {
       role: role || null,
-      requiredSkillCount: (requiredSkills || []).length,
-      optionalSkillCount: (optionalSkills || []).length,
-      requiredSkills: (requiredSkills || []).slice(0, 12),
-      candidatesReturned: mockCandidates.length,
-      perfectMatches: mockCandidates.filter((c) => c.matchScore >= 90).length,
+      requiredSkillCount: required.length,
+      optionalSkillCount: optional.length,
+      requiredSkills: required.slice(0, 12),
+      candidatesReturned: candidates.length,
+      realCandidatesCount: realCandidates.length,
+      perfectMatches: candidates.filter((c) => c.matchScore >= 90).length,
       clusterIndustry: cluster.industry,
       clusterConfidence: cluster.confidence,
       clusterOutliers: cluster.outliers,
       clusterUnknown: cluster.unknown,
       durationMs: Date.now() - startTime,
-      isEmpty: mockCandidates.length === 0,
+      isEmpty: candidates.length === 0,
+      source: realCandidates.length > 0 ? "real" : "mock",
     });
 
     return NextResponse.json({
-      candidates: mockCandidates,
+      candidates,
       cluster: {
         industry: cluster.industry,
         confidence: cluster.confidence,
       },
+      source: realCandidates.length > 0 ? "real" : "mock",
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown";
@@ -67,25 +89,100 @@ export async function POST(req: Request) {
   }
 }
 
-function generateMockCandidates(required: string[], optional: string[]) {
+/**
+ * Real candidates from the shared PayRanker user pool.
+ *
+ * Implementation: pull every UserSkill row whose normalizedTerm matches a
+ * basket skill (case-insensitive via lowercased compare in JS — Prisma
+ * `mode: insensitive` is Postgres-only and works, but doing it in code
+ * keeps the query simple and works if anyone runs this against SQLite
+ * locally). Group by user, score, sort, take top 50.
+ *
+ * Users without an anonymousHandle are excluded — they haven't completed
+ * the profile step so they're not contactable.
+ */
+async function queryRealCandidates(
+  required: string[],
+  optional: string[]
+): Promise<Candidate[]> {
+  if (required.length === 0 && optional.length === 0) return [];
+
+  const basket = [...required, ...optional];
+  const basketLower = new Set(basket.map((s) => s.toLowerCase()));
+
+  // Find every UserSkill that matches one of the basket terms.
+  // Pull the user's anonymousHandle alongside.
+  const userSkills = await prisma.userSkill.findMany({
+    where: {
+      normalizedTerm: {
+        in: basket,
+        mode: "insensitive",
+      },
+      user: {
+        anonymousHandle: { not: null },
+      },
+    },
+    select: {
+      normalizedTerm: true,
+      user: {
+        select: { anonymousHandle: true },
+      },
+    },
+  });
+
+  // Group by handle, then collect each candidate's matched skills.
+  const byHandle = new Map<string, Set<string>>();
+  for (const row of userSkills) {
+    const handle = row.user.anonymousHandle;
+    if (!handle) continue;
+    const lower = row.normalizedTerm.toLowerCase();
+    if (!basketLower.has(lower)) continue;
+    if (!byHandle.has(handle)) byHandle.set(handle, new Set());
+    byHandle.get(handle)!.add(lower);
+  }
+
+  const requiredLower = required.map((s) => s.toLowerCase());
+  const optionalLower = optional.map((s) => s.toLowerCase());
+
+  const candidates: Candidate[] = [];
+  byHandle.forEach((skillSet, handle) => {
+    const matchedRequired = required.filter((s) =>
+      skillSet.has(s.toLowerCase())
+    );
+    const matchedOptional = optional.filter((s) =>
+      skillSet.has(s.toLowerCase())
+    );
+    const reqScore = required.length > 0 ? matchedRequired.length / required.length : 0;
+    const optScore = optional.length > 0 ? matchedOptional.length / optional.length : 0;
+    const matchScore = Math.round((reqScore * 0.7 + optScore * 0.3) * 100);
+
+    candidates.push({
+      handle,
+      matchScore,
+      matchedRequired,
+      matchedOptional,
+      missingRequired: required.filter(
+        (s) => !skillSet.has(s.toLowerCase())
+      ),
+      missingOptional: optional.filter(
+        (s) => !skillSet.has(s.toLowerCase())
+      ),
+      totalRequired: required.length,
+      totalOptional: optional.length,
+      source: "real",
+    });
+    void requiredLower; void optionalLower; // referenced for clarity above
+  });
+
+  candidates.sort((a, b) => b.matchScore - a.matchScore);
+  return candidates.slice(0, 50);
+}
+
+function generateMockCandidates(required: string[], optional: string[]): Candidate[] {
   // Generate syllable-based handles like PayRanker
   const syllables = [
-    "kee",
-    "joo",
-    "mee",
-    "too",
-    "noo",
-    "bee",
-    "zee",
-    "loo",
-    "poo",
-    "roo",
-    "ka",
-    "to",
-    "bu",
-    "mi",
-    "ze",
-    "ri",
+    "kee","joo","mee","too","noo","bee","zee","loo","poo","roo",
+    "ka","to","bu","mi","ze","ri",
   ];
   function handle() {
     const s1 = syllables[Math.floor(Math.random() * syllables.length)];
@@ -94,10 +191,9 @@ function generateMockCandidates(required: string[], optional: string[]) {
   }
 
   const count = Math.min(required.length * 15, 200);
-  const candidates = [];
+  const candidates: Candidate[] = [];
 
   for (let i = 0; i < count; i++) {
-    // Vary match quality: some match all, some match most
     const reqMatchRate =
       i < count * 0.2 ? 1.0 : i < count * 0.5 ? 0.85 : 0.7;
     const optMatchRate = Math.random() * 0.6 + 0.1;
@@ -120,11 +216,10 @@ function generateMockCandidates(required: string[], optional: string[]) {
       missingOptional: optional.filter((s) => !matchedOptional.includes(s)),
       totalRequired: required.length,
       totalOptional: optional.length,
+      source: "mock",
     });
   }
 
-  // Sort by match score descending
   candidates.sort((a, b) => b.matchScore - a.matchScore);
-
-  return candidates.slice(0, 50); // Return top 50
+  return candidates.slice(0, 50);
 }

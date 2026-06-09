@@ -10,6 +10,7 @@ import RecruiterVerificationModal, {
 } from "@/components/RecruiterVerificationModal";
 import SubscriptionModal, {
   isSubscribed,
+  refreshSubscriptionStatus,
 } from "@/components/SubscriptionModal";
 
 interface CandidateRow {
@@ -93,6 +94,22 @@ function CandidatesContent() {
         setSavedHandles(new Set(JSON.parse(savedSet)));
       } catch {}
     }
+
+    // Returning from Stripe Checkout — refresh the cached subscription
+    // state from the webhook-backed Subscription table.
+    const subParam = searchParams?.get("subscribed");
+    if (subParam === "1") {
+      void refreshSubscriptionStatus().then((ok) => {
+        if (ok && pendingAction) {
+          const a = pendingAction;
+          setPendingAction(null);
+          runAction(a);
+        }
+      });
+      // Clean the param so reload doesn't re-trigger
+      router.replace("/candidates");
+    }
+
     const urlRole = searchParams?.get("role");
     const saved = localStorage.getItem("skillmatch_job");
 
