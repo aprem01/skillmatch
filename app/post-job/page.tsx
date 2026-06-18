@@ -4,10 +4,6 @@ import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Share2, ArrowRight } from "lucide-react";
 import SkillmatchHeader from "@/components/SkillmatchHeader";
-import {
-  classifySkillCluster,
-  needsIndustryClarification,
-} from "@/lib/taxonomy";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data — role variants with pre-populated skills               */
@@ -374,23 +370,32 @@ function PostJobContent() {
     setTimeout(() => setAnimatedSkills(new Set()), 500);
   };
 
-  const addManualSkill = () => {
+  const addManualSkill = async () => {
     const trimmed = newSkill.trim();
     if (!trimmed) return;
     if (requiredSkills.includes(trimmed) || optionalSkills.includes(trimmed)) {
       setNewSkill("");
       return;
     }
-    // Ambiguity check: the role's existing basket gives us an anchor.
-    const anchor = classifySkillCluster([
-      ...requiredSkills,
-      ...optionalSkills,
-    ]).industry;
-    const candidates = needsIndustryClarification(trimmed, anchor);
-    if (candidates) {
-      setPendingClarification({ raw: trimmed, industries: candidates });
-      setNewSkill("");
-      return;
+    // Ambiguity check: post the basket to the server so the 900KB+
+    // O*NET taxonomy stays off the client bundle.
+    try {
+      const res = await fetch("/api/skills/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skill: trimmed,
+          basket: [...requiredSkills, ...optionalSkills],
+        }),
+      });
+      const data = await res.json();
+      if (data.candidates) {
+        setPendingClarification({ raw: trimmed, industries: data.candidates });
+        setNewSkill("");
+        return;
+      }
+    } catch {
+      // Network failure → proceed without clarification.
     }
     // Caroline 5/22: manually added skills are more likely Required than
     // Extra — if the recruiter typed it, they meant it. They can toggle
