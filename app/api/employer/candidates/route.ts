@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { classifySkillCluster } from "@/lib/taxonomy";
+import { expandWithSynonyms } from "@/lib/equivalencies";
 
 export const dynamic = "force-dynamic";
 
@@ -108,14 +109,26 @@ async function queryRealCandidates(
   if (required.length === 0 && optional.length === 0) return [];
 
   const basket = [...required, ...optional];
-  const basketLower = new Set(basket.map((s) => s.toLowerCase()));
 
-  // Find every UserSkill that matches one of the basket terms.
-  // Pull the user's anonymousHandle alongside.
+  // Phase 2 equivalency expansion: searching "Customer Service" should
+  // also find candidates who wrote "Client Relations" or "Customer
+  // Support". expandWithSynonyms folds each basket skill through the
+  // EQUIVALENCIES map and returns the full synonym family.
+  const expanded = new Set<string>();
+  for (const s of basket) {
+    for (const variant of expandWithSynonyms(s)) {
+      expanded.add(variant);
+    }
+  }
+  const expandedLower = new Set(
+    Array.from(expanded).map((s) => s.toLowerCase())
+  );
+
+  // Find every UserSkill whose normalizedTerm matches ANY variant.
   const userSkills = await prisma.userSkill.findMany({
     where: {
       normalizedTerm: {
-        in: basket,
+        in: Array.from(expanded),
         mode: "insensitive",
       },
       user: {
@@ -131,27 +144,31 @@ async function queryRealCandidates(
   });
 
   // Group by handle, then collect each candidate's matched skills.
+  // We now accept any synonym variant — a candidate who wrote
+  // "Client Relations" counts as having matched the recruiter's
+  // "Customer Service" requirement.
   const byHandle = new Map<string, Set<string>>();
   for (const row of userSkills) {
     const handle = row.user.anonymousHandle;
     if (!handle) continue;
     const lower = row.normalizedTerm.toLowerCase();
-    if (!basketLower.has(lower)) continue;
+    if (!expandedLower.has(lower)) continue;
     if (!byHandle.has(handle)) byHandle.set(handle, new Set());
     byHandle.get(handle)!.add(lower);
   }
 
-  const requiredLower = required.map((s) => s.toLowerCase());
-  const optionalLower = optional.map((s) => s.toLowerCase());
-
+  // A candidate is counted as having a basket skill if ANY variant of
+  // that skill is in their UserSkill set.
   const candidates: Candidate[] = [];
   byHandle.forEach((skillSet, handle) => {
-    const matchedRequired = required.filter((s) =>
-      skillSet.has(s.toLowerCase())
-    );
-    const matchedOptional = optional.filter((s) =>
-      skillSet.has(s.toLowerCase())
-    );
+    const matchedRequired = required.filter((s) => {
+      const variants = expandWithSynonyms(s).map((v) => v.toLowerCase());
+      return variants.some((v) => skillSet.has(v));
+    });
+    const matchedOptional = optional.filter((s) => {
+      const variants = expandWithSynonyms(s).map((v) => v.toLowerCase());
+      return variants.some((v) => skillSet.has(v));
+    });
     const reqScore = required.length > 0 ? matchedRequired.length / required.length : 0;
     const optScore = optional.length > 0 ? matchedOptional.length / optional.length : 0;
     const matchScore = Math.round((reqScore * 0.7 + optScore * 0.3) * 100);
@@ -161,17 +178,18 @@ async function queryRealCandidates(
       matchScore,
       matchedRequired,
       matchedOptional,
-      missingRequired: required.filter(
-        (s) => !skillSet.has(s.toLowerCase())
-      ),
-      missingOptional: optional.filter(
-        (s) => !skillSet.has(s.toLowerCase())
-      ),
+      missingRequired: required.filter((s) => {
+        const variants = expandWithSynonyms(s).map((v) => v.toLowerCase());
+        return !variants.some((v) => skillSet.has(v));
+      }),
+      missingOptional: optional.filter((s) => {
+        const variants = expandWithSynonyms(s).map((v) => v.toLowerCase());
+        return !variants.some((v) => skillSet.has(v));
+      }),
       totalRequired: required.length,
       totalOptional: optional.length,
       source: "real",
     });
-    void requiredLower; void optionalLower; // referenced for clarity above
   });
 
   candidates.sort((a, b) => b.matchScore - a.matchScore);
