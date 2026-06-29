@@ -42,12 +42,16 @@ const CLOSE_MATCHES: CandidateRow[] = [
   { handle: "MooAx758", match: "6/12", extra: "+3", availability: "In 3 weeks" },
 ];
 
+// Placeholder extras for the demo candidate drawer. Caroline 6/27:
+// keep these on-vertical for the canonical HHA demo path so it doesn't
+// look like a copy-paste design template. Real candidate data replaces
+// this once /api/employer/candidates returns from the live UserSkill
+// pool (already wired — falls back to mock only when pool is empty).
 const EXTRA_SKILL_DETAILS = [
-  "Sketch",
-  "Rhino",
-  "Procurement",
-  "Urban Planning",
-  "Risk Management",
+  "Dementia and Alzheimer's care",
+  "Hospice and palliative care support",
+  "Experience with adaptive equipment",
+  "CNA certification",
 ];
 
 function AvailabilityCell({ value }: { value: string }) {
@@ -462,7 +466,7 @@ function CandidatesContent() {
         <section className="mb-8">
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="px-4 md:px-6 py-3 bg-skBlue text-white font-bold text-sm md:text-base">
-              Top Candidates (meet all required skills. Ranked by extra skills)
+              Top Candidates (meet all required skills. Sorted by additional skills)
             </div>
 
             {/* Column headers (desktop) */}

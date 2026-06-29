@@ -256,6 +256,41 @@ function PostJobContent() {
 
   // --- prefill from share-link query params on mount ---
   useEffect(() => {
+    // Caroline 6/27 Round 4: when the recruiter hits "← Edit role" from
+    // /candidates we should rehydrate the saved basket so they can add
+    // one missing skill without retyping everything. Source-of-truth is
+    // localStorage["skillmatch_job"], written by handleSubmit below.
+    try {
+      const raw =
+        typeof window !== "undefined"
+          ? localStorage.getItem("skillmatch_job")
+          : null;
+      if (raw) {
+        const job = JSON.parse(raw);
+        const restoredRole =
+          job.selectedRole || job.roleInput || job.role || "";
+        if (restoredRole) {
+          setRoleInput(restoredRole);
+          setSelectedRole(restoredRole);
+        }
+        if (Array.isArray(job.requiredSkills) && job.requiredSkills.length) {
+          setRequiredSkills(job.requiredSkills);
+        }
+        if (Array.isArray(job.optionalSkills) && job.optionalSkills.length) {
+          setOptionalSkills(job.optionalSkills);
+        }
+        if (job.employment) setEmployment(job.employment);
+        if (job.shift) setShift(job.shift);
+        if (job.location) setLocation(job.location);
+        if (job.pay) setPay(job.pay);
+        if (job.payPeriod) setPayPeriod(job.payPeriod);
+      }
+    } catch {
+      // ignore — fall through to empty state
+    }
+
+    // Then layer share-link overrides if present (a hiring manager
+    // forwarded a draft to fill in).
     if (!searchParams) return;
     const shared = searchParams.get("shared");
     if (shared !== "1") return;

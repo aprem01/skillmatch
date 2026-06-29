@@ -5,7 +5,7 @@ const valueProps = [
   {
     icon: "/icon-checkmark.png",
     title: "Top candidates, already matched",
-    desc: "Only see workers who meet 100% of your required skills — no more resumes to screen.",
+    desc: "Instantly see your top matches and closest matches based on the skills required for the role.",
   },
   {
     icon: "/icon-target.png",
@@ -25,13 +25,13 @@ const valueProps = [
   {
     icon: "/icon-certificate.png",
     title: "A stronger talent pool over time",
-    desc: "We encourage workers to gain skills and certifications, so you get better candidates over time.",
+    desc: "We help workers gain skills and certifications, so you get better candidates over time.",
   },
 ];
 
 const comparisonRows = [
   "See top candidates instantly",
-  "Match 100% of your requirements",
+  "Matches candidates to required skills",
   "No unqualified applicants",
   "No resumes to review",
   "Based on real skills",

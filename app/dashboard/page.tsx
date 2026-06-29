@@ -273,6 +273,36 @@ export default function DashboardPage() {
   // Handles are synthetic for MVP — real data wiring lives in the
   // /api/employer/messages route on the backend.
   const [awaitingFor, setAwaitingFor] = useState<OpenJob | null>(null);
+  // Caroline 6/27 Round 4: Close Job modal with reason dropdown.
+  // Manual close — never auto-inferred. Reasons captured for analytics.
+  const [closeJobFor, setCloseJobFor] = useState<OpenJob | null>(null);
+  const [closeReason, setCloseReason] = useState<string>("");
+  // Saved-candidates handle picker (clicking the small arrow next to
+  // "5 Saved" routes to the candidates list filtered to those handles).
+  const [savedFor, setSavedFor] = useState<OpenJob | null>(null);
+
+  // Synthetic saved candidate handles per job — same scheme as the
+  // awaiting picker. Real backend wiring deferred.
+  function savedHandles(job: OpenJob): string[] {
+    const POOL = ["KeqJLS","JoeMy395","MuuYu301","Foaky222","Tosds403","SeDo130","ZesRe501"];
+    const n = job.metrics.saved || 0;
+    const seed = job.id.charCodeAt(job.id.length - 1) % POOL.length;
+    return Array.from({ length: n }, (_, i) => POOL[(seed + i) % POOL.length]);
+  }
+
+  // CLOSE_REASONS per Caroline's spec — analytics dropdown captures
+  // why employers close. Useful signal for product loop.
+  const CLOSE_REASONS = [
+    "Position Filled (via Skilmatch)",
+    "Position Filled (other source)",
+    "Hiring Paused",
+    "Budget Change",
+    "Internal Hire / Promotion",
+    "Role Canceled",
+    "Seasonal Hiring Ended",
+    "Duplicate Posting",
+    "Other",
+  ];
 
   // Synthetic candidate handles per job. Stable per-job so the modal
   // feels real; real backend will return the actual awaiting candidates.
@@ -594,6 +624,28 @@ export default function DashboardPage() {
                                     {job.metrics.savedBadge}
                                   </span>
                                 ) : null}
+                                {/* Mini arrow — open the saved-candidates
+                                    handle picker (Caroline 6/27). */}
+                                {job.metrics.saved > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSavedFor(job);
+                                    }}
+                                    aria-label="See saved candidates"
+                                    className="ml-2 inline-flex items-center justify-center bg-gray-300 text-white rounded px-1.5 py-0.5 hover:bg-skTeal transition-colors"
+                                  >
+                                    <svg
+                                      width="10"
+                                      height="10"
+                                      viewBox="0 0 10 10"
+                                      fill="white"
+                                    >
+                                      <polygon points="2,1 9,5 2,9" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                               <div className="flex items-center">
                                 <Dot color={TEAL_DARK} />
@@ -627,6 +679,20 @@ export default function DashboardPage() {
                               className="bg-gray-300 text-white font-semibold rounded-xl px-6 py-2.5 hover:bg-gray-400 transition"
                             >
                               Edit Job
+                            </button>
+                            {/* Caroline 6/27: manual close — employers close
+                                jobs for many reasons; we can't reliably infer.
+                                Opens a modal that captures the reason. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCloseReason("");
+                                setCloseJobFor(job);
+                              }}
+                              className="bg-gray-400 text-white font-semibold rounded-xl px-6 py-2.5 hover:bg-gray-500 transition"
+                            >
+                              Close Job
                             </button>
                             <button
                               type="button"
@@ -900,6 +966,148 @@ export default function DashboardPage() {
             </ul>
             <p className="text-[11px] text-gray-400 italic mt-2">
               Handles stay anonymous until you unlock or hire.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Saved-candidates handle picker — Caroline 6/27 Round 4. */}
+      {savedFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Saved candidates"
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setSavedFor(null)}
+          />
+          <div
+            className="relative bg-white rounded-2xl shadow-xl border-2 w-full max-w-sm p-5"
+            style={{ borderColor: TEAL }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-gray-800 text-sm">
+                {savedFor.metrics.saved} saved candidates
+              </h2>
+              <button
+                onClick={() => setSavedFor(null)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">{savedFor.title}</p>
+            <ul className="flex flex-col gap-1.5 mb-2">
+              {savedHandles(savedFor).map((h) => (
+                <li key={h}>
+                  <Link
+                    href={`/candidates?role=${encodeURIComponent(savedFor.title)}&open=${encodeURIComponent(h)}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-skBeta-bg transition-colors group"
+                  >
+                    <span
+                      className="font-bold text-sm"
+                      style={{ color: TEAL }}
+                    >
+                      {h}
+                    </span>
+                    <span className="text-xs text-gray-400 group-hover:text-skTeal">
+                      Open candidate →
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-gray-400 italic mt-2">
+              Saved candidates are ready for an invite or direct hire.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Close Job modal — Caroline 6/27 Round 4.
+          Manual close (employers close for many reasons we can't infer)
+          + reason dropdown for downstream analytics. */}
+      {closeJobFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Close job"
+        >
+          <button
+            type="button"
+            aria-label="Close modal"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setCloseJobFor(null)}
+          />
+          <div
+            className="relative bg-white rounded-2xl shadow-xl border-2 w-full max-w-md p-6"
+            style={{ borderColor: TEAL }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-gray-800 text-base">
+                Close this job?
+              </h2>
+              <button
+                onClick={() => setCloseJobFor(null)}
+                aria-label="Cancel"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">{closeJobFor.title}</p>
+
+            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+              Why are you closing this position?
+            </label>
+            <select
+              value={closeReason}
+              onChange={(e) => setCloseReason(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border-2 border-gray-200 bg-white focus:outline-none focus:border-skTeal text-sm mb-5"
+            >
+              <option value="" disabled>
+                Choose a reason…
+              </option>
+              {CLOSE_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCloseJobFor(null)}
+                className="px-5 py-2.5 rounded-full text-sm font-bold text-gray-600 bg-gray-200 hover:bg-gray-300 transition-colors"
+              >
+                Keep Open
+              </button>
+              <button
+                type="button"
+                disabled={!closeReason}
+                onClick={() => {
+                  // MVP: just log + close locally. Real backend write
+                  // (PATCH /api/employer/jobs/[id]) wires in when we
+                  // have a real Job table populated.
+                  console.log("close job:", closeJobFor?.id, closeReason);
+                  setCloseJobFor(null);
+                }}
+                className="px-6 py-2.5 rounded-full text-sm font-bold text-white bg-skTeal hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Close Job
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-400 italic mt-4">
+              Closing this job moves it to the Closed tab. You can reopen
+              from there.
             </p>
           </div>
         </div>
