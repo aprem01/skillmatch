@@ -491,9 +491,45 @@ function PostJobContent() {
     };
     localStorage.setItem("skillmatch_job", JSON.stringify(jobData));
 
-    // Fire-and-forget: log the candidate search intent so /admin can see
-    // what employers actually look for. Captures Marielee-style debugging
-    // signal even though the candidates page renders mock data for MVP.
+    // Caroline 6/27 Round 4: persist a real Job row so /dashboard shows
+    // the posting and Close Job/Edit Job/View Candidates work end-to-end.
+    // Recruiter identity comes from the verification modal (work email).
+    let recruiterEmail: string | null = null;
+    try {
+      const raw = localStorage.getItem("skillmatch_verification");
+      if (raw) recruiterEmail = JSON.parse(raw).workEmail?.toLowerCase() ?? null;
+    } catch {}
+
+    if (recruiterEmail) {
+      // Convert pay to hourly cents (Adzuna-compatible).
+      const payNum = parseFloat((pay || "").replace(/[^0-9.]/g, "")) || 0;
+      const hourly =
+        payPeriod === "hour"
+          ? payNum
+          : payPeriod === "month"
+          ? payNum / 160
+          : payNum / 2080;
+      const cents = Math.round(hourly * 100);
+      fetch("/api/employer/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recruiterEmail,
+          role: jobData.role,
+          location: location || "Chicago, IL",
+          shiftType: employment,
+          payType: payPeriod === "hour" ? "hourly" : "salary",
+          payMin: cents > 0 ? Math.round(cents * 0.85) : 1500,
+          payMax: cents > 0 ? Math.round(cents * 1.15) : 2500,
+          requiredSkills,
+          optionalSkills,
+        }),
+      }).catch(() => {
+        // Non-blocking — dashboard still has prior fixture data
+      });
+    }
+
+    // Existing analytics log of the candidate-search intent.
     fetch("/api/employer/candidates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

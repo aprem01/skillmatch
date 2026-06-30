@@ -462,53 +462,94 @@ function CandidatesContent() {
           </div>
         </div>
 
-        {/* Top Candidates table */}
-        <section className="mb-8">
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="px-4 md:px-6 py-3 bg-skBlue text-white font-bold text-sm md:text-base">
-              Top Candidates (meet all required skills. Sorted by additional skills)
-            </div>
+        {/* Caroline 6/27 Round 4: when arriving via ?filter=saved from
+            the header dropdown or dashboard arrow, show only saved
+            candidates instead of the full Top + Close tables. */}
+        {(() => {
+          const filterMode = searchParams?.get("filter") === "saved";
+          if (filterMode) {
+            const allRows = [...TOP_CANDIDATES, ...CLOSE_MATCHES];
+            const savedRows = allRows.filter((c) => savedHandles.has(c.handle));
+            return (
+              <section className="mb-8">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div className="px-4 md:px-6 py-3 bg-skTeal text-white font-bold text-sm md:text-base">
+                    Saved candidates ({savedRows.length})
+                  </div>
+                  {savedRows.length === 0 ? (
+                    <div className="px-6 py-10 text-center">
+                      <p className="text-sm text-skGray-desc mb-2">
+                        No saved candidates yet.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/candidates")}
+                        className="text-sm text-skTeal font-semibold hover:underline"
+                      >
+                        Browse candidates →
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {savedRows.map((c, i) => renderRow(c, "top", i))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          }
+          return (
+            <>
+              {/* Top Candidates table */}
+              <section className="mb-8">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div className="px-4 md:px-6 py-3 bg-skBlue text-white font-bold text-sm md:text-base">
+                    Top Candidates (meet all required skills. Sorted by additional skills)
+                  </div>
 
-            {/* Column headers (desktop) */}
-            <div
-              className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
-              style={{ backgroundColor: "#DEFBFF", color: "#719192" }}
-            >
-              <div>Candidate</div>
-              <div>Top Match</div>
-              <div>Extra Skills</div>
-              <div>Availability</div>
-            </div>
+                  {/* Column headers (desktop) */}
+                  <div
+                    className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
+                    style={{ backgroundColor: "#DEFBFF", color: "#719192" }}
+                  >
+                    <div>Candidate</div>
+                    <div>Top Match</div>
+                    <div>Extra Skills</div>
+                    <div>Availability</div>
+                  </div>
 
-            <div>
-              {TOP_CANDIDATES.map((c, i) => renderRow(c, "top", i))}
-            </div>
-          </div>
-        </section>
+                  <div>
+                    {TOP_CANDIDATES.map((c, i) => renderRow(c, "top", i))}
+                  </div>
+                </div>
+              </section>
 
-        {/* Close Matches table */}
-        <section className="mb-8">
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="px-4 md:px-6 py-3 bg-skGreen text-white font-bold text-sm md:text-base">
-              Close Matches (missing some required skills)
-            </div>
+              {/* Close Matches table */}
+              <section className="mb-8">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div className="px-4 md:px-6 py-3 bg-skGreen text-white font-bold text-sm md:text-base">
+                    Close Matches (missing some required skills)
+                  </div>
 
-            {/* Column headers (desktop) */}
-            <div
-              className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
-              style={{ backgroundColor: "#DEFCE8", color: "#719192" }}
-            >
-              <div>Candidate</div>
-              <div>Match</div>
-              <div>Extra Skills</div>
-              <div>Availability</div>
-            </div>
+                  {/* Column headers (desktop) */}
+                  <div
+                    className="hidden md:grid grid-cols-[40%_15%_15%_30%] px-6 py-2.5 border-b border-gray-200 text-xs uppercase tracking-wider font-semibold"
+                    style={{ backgroundColor: "#DEFCE8", color: "#719192" }}
+                  >
+                    <div>Candidate</div>
+                    <div>Match</div>
+                    <div>Extra Skills</div>
+                    <div>Availability</div>
+                  </div>
 
-            <div>
-              {CLOSE_MATCHES.map((c, i) => renderRow(c, "close", i))}
-            </div>
-          </div>
-        </section>
+                  <div>
+                    {CLOSE_MATCHES.map((c, i) => renderRow(c, "close", i))}
+                  </div>
+                </div>
+              </section>
+            </>
+          );
+        })()}
       </main>
 
       {/* Invite to Interview Modal — teal, feels like a game not a form */}

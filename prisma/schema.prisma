@@ -128,9 +128,17 @@ model Job {
   shiftType       String        @default("full_time") // "full_time" | "part_time" | "contract" | "per_diem"
   isActive        Boolean       @default(true)
   isAIReplaceable Boolean       @default(false)
+  // Caroline 6/27 Round 4: ownership + manual close with reason
+  recruiterEmail  String?       // owning recruiter (from RecruiterVerification)
+  closedAt        DateTime?
+  closedReason    String?       // "Position Filled (via Skilmatch)" | ... | "Other"
+  optionalSkills  String[]      @default([])
   requiredSkills  JobSkill[]
   postedAt        DateTime      @default(now())
   applications    Application[]
+
+  @@index([recruiterEmail])
+  @@index([isActive])
 }
 
 model JobSkill {

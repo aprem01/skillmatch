@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -261,6 +261,109 @@ function Dot({ color, outline = false }: { color: string; outline?: boolean }) {
 export default function DashboardPage() {
   const [tab, setTab] = useState<"open" | "closed">("open");
   const [search, setSearch] = useState("");
+  // Caroline 6/27 Round 4: live recruiter jobs from /api/employer/jobs.
+  // Replaces the hardcoded OPEN_JOBS fixture on mount. Falls back to
+  // the fixture when the API has nothing for this recruiter.
+  const [liveOpenJobs, setLiveOpenJobs] = useState<OpenJob[]>(OPEN_JOBS);
+  const [liveClosedJobs, setLiveClosedJobs] = useState<ClosedJob[]>(CLOSED_JOBS);
+
+  useEffect(() => {
+    let recruiterEmail = "";
+    try {
+      const raw = localStorage.getItem("skillmatch_verification");
+      if (raw) recruiterEmail = JSON.parse(raw).workEmail || "";
+    } catch {}
+    // Fallback to a demo recruiter so the dashboard isn't empty when
+    // demo-browsing without a verified login.
+    if (!recruiterEmail) recruiterEmail = "sarah@demo.attendhomecare.com";
+
+    async function load() {
+      try {
+        const openRes = await fetch(
+          `/api/employer/jobs?email=${encodeURIComponent(recruiterEmail)}&status=open`
+        );
+        const openJson = await openRes.json();
+        if (Array.isArray(openJson.jobs) && openJson.jobs.length > 0) {
+          const mapped: OpenJob[] = openJson.jobs.map(
+            (j: {
+              id: string;
+              title: string;
+              location: string;
+              payMax: number;
+              shiftType: string;
+              postedAt: string;
+              requiredSkills?: string[];
+              applicationCount?: number;
+            }) => {
+              const daysAgo = Math.max(
+                0,
+                Math.floor(
+                  (Date.now() - new Date(j.postedAt).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              );
+              return {
+                id: j.id,
+                title: j.title,
+                pay: `$${(j.payMax / 100).toFixed(0)}/hr`,
+                type: j.shiftType === "part_time" ? "Part-time" : "Full-time",
+                location: j.location,
+                postedDays: daysAgo,
+                awaitingResponse: 0,
+                metrics: {
+                  requiredSkills: (j.requiredSkills || []).length,
+                  lowMatchSkills: 0,
+                  candidates: j.applicationCount || 0,
+                  saved: 0,
+                  conversations: 0,
+                  interviewsScheduled: 0,
+                  offersSent: 0,
+                },
+                skills: (j.requiredSkills || []).map((name) => ({ name })),
+              };
+            }
+          );
+          setLiveOpenJobs(mapped);
+        }
+        const closedRes = await fetch(
+          `/api/employer/jobs?email=${encodeURIComponent(recruiterEmail)}&status=closed`
+        );
+        const closedJson = await closedRes.json();
+        if (Array.isArray(closedJson.jobs) && closedJson.jobs.length > 0) {
+          const mapped: ClosedJob[] = closedJson.jobs.map(
+            (j: {
+              id: string;
+              title: string;
+              location: string;
+              payMax: number;
+              shiftType: string;
+              closedAt: string;
+              applicationCount?: number;
+            }) => ({
+              id: j.id,
+              title: j.title,
+              pay: `$${(j.payMax / 100).toFixed(0)}/hr`,
+              type: j.shiftType === "part_time" ? "Part-time" : "Full-time",
+              location: j.location,
+              closedOn: j.closedAt
+                ? new Date(j.closedAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "Recently",
+              hires: 0,
+              metrics: { hires: 0, candidates: j.applicationCount || 0, interviews: 0 },
+            })
+          );
+          setLiveClosedJobs(mapped);
+        }
+      } catch {
+        // network failure → fixtures remain
+      }
+    }
+    load();
+  }, []);
   // Caroline 5/22: dashboard opens with all jobs collapsed — recruiter
   // scans the list, expands what they want.
   const [expandedOpen, setExpandedOpen] = useState<string | null>(null);
@@ -323,26 +426,26 @@ export default function DashboardPage() {
   }
 
   const filteredOpen = useMemo(() => {
-    if (!search.trim()) return OPEN_JOBS;
+    if (!search.trim()) return liveOpenJobs;
     const q = search.toLowerCase();
-    return OPEN_JOBS.filter(
+    return liveOpenJobs.filter(
       (j) =>
         j.title.toLowerCase().includes(q) ||
         j.location.toLowerCase().includes(q) ||
         j.type.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, liveOpenJobs]);
 
   const filteredClosed = useMemo(() => {
-    if (!search.trim()) return CLOSED_JOBS;
+    if (!search.trim()) return liveClosedJobs;
     const q = search.toLowerCase();
-    return CLOSED_JOBS.filter(
+    return liveClosedJobs.filter(
       (j) =>
         j.title.toLowerCase().includes(q) ||
         j.location.toLowerCase().includes(q) ||
         j.type.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, liveClosedJobs]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -1092,11 +1195,41 @@ export default function DashboardPage() {
               <button
                 type="button"
                 disabled={!closeReason}
-                onClick={() => {
-                  // MVP: just log + close locally. Real backend write
-                  // (PATCH /api/employer/jobs/[id]) wires in when we
-                  // have a real Job table populated.
-                  console.log("close job:", closeJobFor?.id, closeReason);
+                onClick={async () => {
+                  if (!closeJobFor) return;
+                  const id = closeJobFor.id;
+                  const reason = closeReason;
+                  // Persist server-side. Non-blocking — UI moves the job
+                  // to closed regardless of network outcome so the
+                  // recruiter never feels stuck.
+                  fetch(`/api/employer/jobs/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "close", reason }),
+                  }).catch(() => {});
+                  // Optimistic UI: move from open → closed locally.
+                  setLiveOpenJobs((prev) => prev.filter((j) => j.id !== id));
+                  setLiveClosedJobs((prev) => [
+                    {
+                      id,
+                      title: closeJobFor.title,
+                      pay: closeJobFor.pay,
+                      type: closeJobFor.type,
+                      location: closeJobFor.location,
+                      closedOn: new Date().toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      }),
+                      hires: 0,
+                      metrics: {
+                        hires: 0,
+                        candidates: closeJobFor.metrics.candidates,
+                        interviews: closeJobFor.metrics.interviewsScheduled,
+                      },
+                    },
+                    ...prev,
+                  ]);
                   setCloseJobFor(null);
                 }}
                 className="px-6 py-2.5 rounded-full text-sm font-bold text-white bg-skTeal hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
