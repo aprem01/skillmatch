@@ -37,6 +37,7 @@ export default function SkillmatchHeader({
   }, [open]);
 
   const MENU_ITEMS: { label: string; href: string; key: string }[] = [
+    { label: "Our Mission", href: "/mission", key: "mission" },
     { label: "Your Account", href: "/account", key: "account" },
     { label: "Your Dashboard", href: "/dashboard", key: "dashboard" },
     { label: "Your Messages", href: "/messages", key: "messages" },

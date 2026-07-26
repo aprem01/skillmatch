@@ -256,37 +256,47 @@ function PostJobContent() {
 
   // --- prefill from share-link query params on mount ---
   useEffect(() => {
-    // Caroline 6/27 Round 4: when the recruiter hits "← Edit role" from
-    // /candidates we should rehydrate the saved basket so they can add
-    // one missing skill without retyping everything. Source-of-truth is
-    // localStorage["skillmatch_job"], written by handleSubmit below.
-    try {
-      const raw =
-        typeof window !== "undefined"
-          ? localStorage.getItem("skillmatch_job")
-          : null;
-      if (raw) {
-        const job = JSON.parse(raw);
-        const restoredRole =
-          job.selectedRole || job.roleInput || job.role || "";
-        if (restoredRole) {
-          setRoleInput(restoredRole);
-          setSelectedRole(restoredRole);
+    // Caroline 7/20 Round 5: Enter Role was persisting the previous role
+    // for every fresh entry, so recruiters would land on /post-job and see
+    // the last posted job's title already filled in. Only rehydrate the
+    // saved draft when the recruiter explicitly clicked "← Edit role" from
+    // /candidates (?edit=1) or the URL asks to resume a shared draft.
+    // Fresh navigations from /dashboard, homepage CTA, or a direct link
+    // start clean.
+    const isEditMode = searchParams?.get("edit") === "1";
+    if (isEditMode) {
+      try {
+        const raw =
+          typeof window !== "undefined"
+            ? localStorage.getItem("skillmatch_job")
+            : null;
+        if (raw) {
+          const job = JSON.parse(raw);
+          const restoredRole =
+            job.selectedRole || job.roleInput || job.role || "";
+          if (restoredRole) {
+            setRoleInput(restoredRole);
+            setSelectedRole(restoredRole);
+          }
+          if (Array.isArray(job.requiredSkills) && job.requiredSkills.length) {
+            setRequiredSkills(job.requiredSkills);
+          }
+          if (Array.isArray(job.optionalSkills) && job.optionalSkills.length) {
+            setOptionalSkills(job.optionalSkills);
+          }
+          if (job.employment) setEmployment(job.employment);
+          if (job.shift) setShift(job.shift);
+          if (job.location) setLocation(job.location);
+          if (job.pay) setPay(job.pay);
+          if (job.payPeriod) setPayPeriod(job.payPeriod);
         }
-        if (Array.isArray(job.requiredSkills) && job.requiredSkills.length) {
-          setRequiredSkills(job.requiredSkills);
-        }
-        if (Array.isArray(job.optionalSkills) && job.optionalSkills.length) {
-          setOptionalSkills(job.optionalSkills);
-        }
-        if (job.employment) setEmployment(job.employment);
-        if (job.shift) setShift(job.shift);
-        if (job.location) setLocation(job.location);
-        if (job.pay) setPay(job.pay);
-        if (job.payPeriod) setPayPeriod(job.payPeriod);
+      } catch {
+        // ignore — fall through to empty state
       }
-    } catch {
-      // ignore — fall through to empty state
+    } else if (typeof window !== "undefined") {
+      // Fresh entry: wipe any stale draft so it doesn't leak into the
+      // NEXT edit session either.
+      localStorage.removeItem("skillmatch_job");
     }
 
     // Then layer share-link overrides if present (a hiring manager

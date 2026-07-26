@@ -431,7 +431,7 @@ function CandidatesContent() {
       <SkillmatchHeader messageCount={21} />
       <div className="max-w-5xl mx-auto px-4 pt-4">
         <button
-          onClick={() => router.push("/post-job")}
+          onClick={() => router.push("/post-job?edit=1")}
           className="text-sm text-skGray hover:text-skTeal transition-colors"
         >
           ← Edit role
