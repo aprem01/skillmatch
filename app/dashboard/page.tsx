@@ -266,16 +266,30 @@ export default function DashboardPage() {
   // the fixture when the API has nothing for this recruiter.
   const [liveOpenJobs, setLiveOpenJobs] = useState<OpenJob[]>(OPEN_JOBS);
   const [liveClosedJobs, setLiveClosedJobs] = useState<ClosedJob[]>(CLOSED_JOBS);
+  // Caroline 7/28 Round 7: recruiters using Skilmatch for multiple
+  // companies need to see which company they're currently posting for.
+  const [companyName, setCompanyName] = useState<string>("");
 
   useEffect(() => {
     let recruiterEmail = "";
+    let resolvedCompany = "";
     try {
       const raw = localStorage.getItem("skillmatch_verification");
-      if (raw) recruiterEmail = JSON.parse(raw).workEmail || "";
+      if (raw) {
+        const v = JSON.parse(raw);
+        recruiterEmail = v.workEmail || "";
+        resolvedCompany = v.companyName || v.company || "";
+      }
     } catch {}
     // Fallback to a demo recruiter so the dashboard isn't empty when
     // demo-browsing without a verified login.
     if (!recruiterEmail) recruiterEmail = "sarah@demo.attendhomecare.com";
+    if (!resolvedCompany) {
+      // Derive from email domain as a reasonable default
+      const domain = recruiterEmail.split("@")[1]?.split(".")[0];
+      if (domain) resolvedCompany = domain.charAt(0).toUpperCase() + domain.slice(1);
+    }
+    setCompanyName(resolvedCompany || "Your Company");
 
     async function load() {
       try {
@@ -504,6 +518,26 @@ export default function DashboardPage() {
 
       {/* Body */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        {/* Caroline 7/28 Round 7: company identification banner so recruiters
+            managing multiple companies always know which one they're posting for. */}
+        {companyName && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-skTeal/25 bg-skTeal/[0.06] px-4 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                Posting for
+              </span>
+              <span className="text-base font-bold text-skTeal truncate">
+                {companyName}
+              </span>
+            </div>
+            <a
+              href="/account"
+              className="shrink-0 text-xs font-semibold text-gray-500 hover:text-skTeal underline underline-offset-2"
+            >
+              Switch
+            </a>
+          </div>
+        )}
         {/* Top action row */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           {/* Caroline: bright blue + rounded box (not pill) */}

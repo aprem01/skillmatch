@@ -4,7 +4,7 @@ import Image from "next/image";
 const valueProps = [
   {
     icon: "/icon-checkmark.png",
-    title: "Top candidates, already matched",
+    title: "See your top candidates",
     desc: "Instantly see your top matches and closest matches based on the skills required for the role.",
   },
   {
@@ -20,7 +20,7 @@ const valueProps = [
   {
     icon: "/icon-stars.png",
     title: "Hire in minutes, not days",
-    desc: "Instantly connect with your best matches — no more waiting for applications.",
+    desc: "Instantly connect with your best candidates — no more waiting for applications.",
   },
   {
     icon: "/icon-certificate.png",
