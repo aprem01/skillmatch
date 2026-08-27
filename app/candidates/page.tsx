@@ -800,6 +800,50 @@ function CandidatesContent() {
                   Cancel
                 </button>
                 <button
+                  onClick={async () => {
+                    // Caroline 8/23 Round 8 P03: on send, PATCH the shared
+                    // Application row to interview_requested via
+                    // /api/employer/interview-request. The candidate now
+                    // sees the request in PayRanker Messages and must
+                    // complete their verified profile before accepting.
+                    if (!inviteCandidate) return;
+                    try {
+                      let recruiterEmail = "";
+                      try {
+                        const raw = localStorage.getItem("skillmatch_verification");
+                        if (raw) recruiterEmail = JSON.parse(raw).workEmail || "";
+                      } catch {}
+                      const savedJob = localStorage.getItem("skillmatch_job");
+                      const jobObj = savedJob ? JSON.parse(savedJob) : {};
+                      const jobId = jobObj.id || jobObj.jobId || "";
+                      if (!recruiterEmail || !jobId) {
+                        alert(
+                          "Missing recruiter email or job identifier. Post the job first, then try again."
+                        );
+                        return;
+                      }
+                      const res = await fetch("/api/employer/interview-request", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          recruiterEmail,
+                          handle: inviteCandidate.handle,
+                          jobId,
+                          message: inviteMessage,
+                        }),
+                      });
+                      if (!res.ok) {
+                        const j = await res.json().catch(() => ({}));
+                        throw new Error(j.error || `HTTP ${res.status}`);
+                      }
+                      closeInvite();
+                    } catch (e) {
+                      alert(
+                        "Couldn't send the interview request. " +
+                          (e instanceof Error ? e.message : "")
+                      );
+                    }
+                  }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold transition-opacity hover:opacity-90"
                   style={{
                     backgroundColor: "#01D6FF",
