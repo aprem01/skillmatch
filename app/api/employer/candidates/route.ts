@@ -159,6 +159,30 @@ async function queryRealCandidates(
     byHandle.get(handle)!.add(lower);
   }
 
+  // Caroline 8/26 Round 8: generic skills (Communication, Management,
+  // Customer Service, Problem Solving, Training, Time Management) must
+  // NOT by themselves qualify a candidate as a Top match. If the ONLY
+  // required skills the candidate shares are generic ones, they are
+  // demoted below any candidate matching a domain-specific required
+  // skill. We compute a `specificMatched` count and use it as the
+  // primary sort key; Top Candidate = specificMatched === totalRequired
+  // when specific requirements exist.
+  const GENERIC_SKILLS = new Set(
+    [
+      "customer service",
+      "communication",
+      "management",
+      "problem solving",
+      "training",
+      "time management",
+      "leadership",
+      "teamwork",
+      "team management",
+    ].map((s) => s.toLowerCase())
+  );
+  const isGeneric = (s: string) => GENERIC_SKILLS.has(s.toLowerCase());
+  const requiredSpecific = required.filter((s) => !isGeneric(s));
+
   // A candidate is counted as having a basket skill if ANY variant of
   // that skill is in their UserSkill set.
   const candidates: Candidate[] = [];
@@ -171,9 +195,23 @@ async function queryRealCandidates(
       const variants = expandWithSynonyms(s).map((v) => v.toLowerCase());
       return variants.some((v) => skillSet.has(v));
     });
+    const matchedSpecific = matchedRequired.filter((s) => !isGeneric(s));
+    // Only-generic overlap → drop before Top/Close classification.
+    if (requiredSpecific.length > 0 && matchedSpecific.length === 0) {
+      return;
+    }
     const reqScore = required.length > 0 ? matchedRequired.length / required.length : 0;
     const optScore = optional.length > 0 ? matchedOptional.length / optional.length : 0;
-    const matchScore = Math.round((reqScore * 0.7 + optScore * 0.3) * 100);
+    // Weight specific-skill match higher than generic — a candidate
+    // matching 3 of 4 specific required skills beats one matching all
+    // 4 including 3 generic ones.
+    const specificScore =
+      requiredSpecific.length > 0
+        ? matchedSpecific.length / requiredSpecific.length
+        : reqScore;
+    const matchScore = Math.round(
+      (specificScore * 0.55 + reqScore * 0.25 + optScore * 0.2) * 100
+    );
 
     candidates.push({
       handle,

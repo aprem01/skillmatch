@@ -234,6 +234,12 @@ function PostJobContent() {
   const [employment, setEmployment] = useState<"contract" | "part_time" | "full_time">("full_time");
   const [shift, setShift] = useState<"day" | "night" | "on_call">("day");
   const [location, setLocation] = useState<"on_site" | "hybrid" | "remote">("on_site");
+  // Caroline 8/26 Round 8: Job Location is SEPARATE from the recruiter's
+  // location. On-site + hybrid require a specific city/ZIP; remote asks
+  // for geographic eligibility ("United States" default, or a list of
+  // states/cities).
+  const [jobLocation, setJobLocation] = useState(""); // city or ZIP for on_site/hybrid
+  const [remoteEligibility, setRemoteEligibility] = useState("United States");
   const [pay, setPay] = useState("");
   const [payPeriod, setPayPeriod] = useState<"year" | "month" | "hour">("year");
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
@@ -287,6 +293,8 @@ function PostJobContent() {
           if (job.employment) setEmployment(job.employment);
           if (job.shift) setShift(job.shift);
           if (job.location) setLocation(job.location);
+          if (typeof job.jobLocation === "string") setJobLocation(job.jobLocation);
+          if (typeof job.remoteEligibility === "string") setRemoteEligibility(job.remoteEligibility);
           if (job.pay) setPay(job.pay);
           if (job.payPeriod) setPayPeriod(job.payPeriod);
         }
@@ -487,6 +495,22 @@ function PostJobContent() {
 
   // --- submit ---
   const handleSubmit = () => {
+    // Caroline 8/26 Round 8: Job Location is a required field for
+    // on-site + hybrid roles. Remote falls back to the geographic
+    // eligibility (US-wide by default, or the specific list typed).
+    const resolvedJobLocation = (() => {
+      if (location === "on_site" || location === "hybrid") {
+        return jobLocation.trim();
+      }
+      if (location === "remote") {
+        return jobLocation.trim() || remoteEligibility;
+      }
+      return "";
+    })();
+    if ((location === "on_site" || location === "hybrid") && !resolvedJobLocation) {
+      alert("Please enter the city or ZIP code where this job is located.");
+      return;
+    }
     const jobData = {
       role: selectedRole || roleInput,
       selectedRole: selectedRole || roleInput,
@@ -496,6 +520,8 @@ function PostJobContent() {
       employment,
       shift,
       location,
+      jobLocation: resolvedJobLocation,
+      remoteEligibility,
       pay,
       payPeriod,
     };
@@ -526,7 +552,7 @@ function PostJobContent() {
         body: JSON.stringify({
           recruiterEmail,
           role: jobData.role,
-          location: location || "Chicago, IL",
+          location: resolvedJobLocation || "Chicago, IL",
           shiftType: employment,
           payType: payPeriod === "hour" ? "hourly" : "salary",
           payMin: cents > 0 ? Math.round(cents * 0.85) : 1500,
@@ -780,9 +806,9 @@ function PostJobContent() {
               </div>
             </fieldset>
 
-            {/* Location */}
+            {/* Work Arrangement */}
             <fieldset>
-              <legend className="text-sm font-semibold text-skGray mb-2">Location</legend>
+              <legend className="text-sm font-semibold text-skGray mb-2">Work Arrangement</legend>
               <div className="flex flex-wrap gap-4">
                 {([
                   ["on_site", "On-site"],
@@ -800,6 +826,61 @@ function PostJobContent() {
                 ))}
               </div>
             </fieldset>
+
+            {/* Caroline 8/26 Round 8: Job Location — separate from
+                recruiter location. On-site/hybrid require a city or ZIP;
+                remote asks for geographic eligibility. Candidate matching
+                uses this field, not the recruiter's location. */}
+            {(location === "on_site" || location === "hybrid") && (
+              <fieldset>
+                <legend className="text-sm font-semibold text-skGray mb-2">
+                  Where is this job located?
+                </legend>
+                <input
+                  type="text"
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="Enter city or ZIP code (e.g. Chicago, IL / 60615)"
+                  aria-required="true"
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-skTeal-bright focus:border-[3px] focus:border-skTeal-bright focus:outline-none text-gray-900 placeholder:text-skTeal bg-white"
+                />
+                <p className="mt-1.5 text-xs text-skGray-desc">
+                  Candidate matching uses this location, not your own.
+                </p>
+              </fieldset>
+            )}
+            {location === "remote" && (
+              <fieldset>
+                <legend className="text-sm font-semibold text-skGray mb-2">
+                  Where can this remote employee work from?
+                </legend>
+                <select
+                  value={remoteEligibility}
+                  onChange={(e) => setRemoteEligibility(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-skTeal-bright focus:border-[3px] focus:border-skTeal-bright focus:outline-none text-gray-900 bg-white"
+                >
+                  <option>United States</option>
+                  <option>Specific states</option>
+                  <option>Specific cities / regions</option>
+                </select>
+                {remoteEligibility !== "United States" && (
+                  <input
+                    type="text"
+                    value={jobLocation}
+                    onChange={(e) => setJobLocation(e.target.value)}
+                    placeholder={
+                      remoteEligibility === "Specific states"
+                        ? "e.g. IL, IN, WI"
+                        : "e.g. Chicago, Naperville, Oak Park"
+                    }
+                    className="mt-2 w-full px-4 py-2.5 rounded-xl border-2 border-skTeal-bright focus:border-[3px] focus:border-skTeal-bright focus:outline-none text-gray-900 placeholder:text-skTeal bg-white"
+                  />
+                )}
+                <p className="mt-1.5 text-xs text-skGray-desc">
+                  Some remote roles are restricted geographically for payroll or licensing.
+                </p>
+              </fieldset>
+            )}
 
             {/* Pay */}
             <fieldset>

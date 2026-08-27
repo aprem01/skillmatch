@@ -1000,6 +1000,49 @@ export default function DashboardPage() {
                             </button>
                             <button
                               type="button"
+                              onClick={async () => {
+                                // Caroline 8/26 Round 8: Reopen returns
+                                // the job to Active. PATCH the record then
+                                // move it in local state.
+                                try {
+                                  const res = await fetch(
+                                    `/api/employer/jobs/${job.id}`,
+                                    {
+                                      method: "PATCH",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ action: "reopen" }),
+                                    }
+                                  );
+                                  if (!res.ok) throw new Error(`status ${res.status}`);
+                                  setLiveClosedJobs((prev) => prev.filter((j) => j.id !== job.id));
+                                  setLiveOpenJobs((prev) => [
+                                    ...prev,
+                                    {
+                                      id: job.id,
+                                      title: job.title,
+                                      pay: job.pay,
+                                      type: job.type,
+                                      location: job.location,
+                                      postedDays: 0,
+                                      metrics: {
+                                        requiredSkills: 0,
+                                        lowMatchSkills: 0,
+                                        candidates: 0,
+                                        saved: 0,
+                                        conversations: 0,
+                                        interviewsScheduled: 0,
+                                      },
+                                      skills: [],
+                                    } as OpenJob,
+                                  ]);
+                                  setExpandedClosed(null);
+                                } catch (e) {
+                                  alert(
+                                    "Reopen failed. " +
+                                      (e instanceof Error ? e.message : "Please try again.")
+                                  );
+                                }
+                              }}
                               className="inline-flex items-center gap-2 bg-skTeal text-white font-semibold rounded-xl px-6 py-2.5 transition hover:opacity-90"
                             >
                               Reopen Job

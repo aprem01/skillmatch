@@ -83,6 +83,12 @@ function CandidatesContent() {
   const [slot2, setSlot2] = useState("");
   const [slot3, setSlot3] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
+  // Caroline 8/26 Round 8: Save is scoped to a specific job posting, not
+  // global. Structure in localStorage:
+  //   skillmatch_saved_by_job = { [jobKey: string]: string[] handles }
+  // jobKey resolves from the current job title (or "__default" when the
+  // recruiter hasn't loaded a job). Legacy skillmatch_saved (flat array)
+  // is migrated into the "__legacy" slot on first mount.
   const [savedHandles, setSavedHandles] = useState<Set<string>>(new Set());
   // Caroline 8/26 Round 8: live candidate fetch replaces the FPO
   // TOP_CANDIDATES / CLOSE_MATCHES arrays. When the pool is empty we
@@ -101,13 +107,44 @@ function CandidatesContent() {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
 
+  // Job key drives the scoped saved-candidates set. When jobTitle
+  // hasn't loaded yet we use "__default" so the effect can re-run once
+  // jobTitle is known.
+  const jobKey = (jobTitle || "__default").trim().toLowerCase();
+
   useEffect(() => {
-    const savedSet = localStorage.getItem("skillmatch_saved");
-    if (savedSet) {
-      try {
-        setSavedHandles(new Set(JSON.parse(savedSet)));
-      } catch {}
+    // Migrate legacy global `skillmatch_saved` → per-job map's "__legacy"
+    // bucket the first time we see it, then delete the old key.
+    try {
+      const legacy = localStorage.getItem("skillmatch_saved");
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const bookRaw = localStorage.getItem("skillmatch_saved_by_job");
+          const book = bookRaw ? JSON.parse(bookRaw) : {};
+          book.__legacy = parsed;
+          localStorage.setItem(
+            "skillmatch_saved_by_job",
+            JSON.stringify(book)
+          );
+        }
+        localStorage.removeItem("skillmatch_saved");
+      }
+    } catch {}
+    // Load the set for the current job.
+    try {
+      const bookRaw = localStorage.getItem("skillmatch_saved_by_job");
+      const book = bookRaw ? JSON.parse(bookRaw) : {};
+      const list: string[] = Array.isArray(book[jobKey]) ? book[jobKey] : [];
+      setSavedHandles(new Set(list));
+    } catch {
+      setSavedHandles(new Set());
     }
+  }, [jobKey]);
+
+  // Placeholder effect body (kept for the original verified-magic-link
+  // handling below).
+  useEffect(() => {
 
     // Returning from the Resend magic-link → refresh verified state.
     const verifiedParam = searchParams?.get("verified");
@@ -261,10 +298,13 @@ function CandidatesContent() {
       const next = new Set(prev);
       if (next.has(handle)) next.delete(handle);
       else next.add(handle);
-      localStorage.setItem(
-        "skillmatch_saved",
-        JSON.stringify(Array.from(next))
-      );
+      // Caroline 8/26 Round 8: scope to the current job.
+      try {
+        const raw = localStorage.getItem("skillmatch_saved_by_job");
+        const book = raw ? JSON.parse(raw) : {};
+        book[jobKey] = Array.from(next);
+        localStorage.setItem("skillmatch_saved_by_job", JSON.stringify(book));
+      } catch {}
       return next;
     });
   }
