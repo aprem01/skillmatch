@@ -3,6 +3,28 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Caroline 8/26 Round 8 global rule: prohibited-activity screening on
+// employer job postings. Same regex list as PayRanker's normalize
+// endpoint — kept inline (rather than shared) so the two products stay
+// deployable independently. If either the title, description, or any
+// required/optional skill matches, the job is rejected with a 422.
+const PROHIBITED_JOB_PATTERNS: RegExp[] = [
+  /\b(drug|narcotics?|cocaine|meth|heroin|fentanyl|opioid)\s+(dealing|dealer|trafficking|selling|distribution)\b/i,
+  /\bdrug\s+trafficker\b/i,
+  /\bhuman\s+trafficking\b/i,
+  /\bsex\s+trafficking\b/i,
+  /\bchild\s+(exploitation|pornography|trafficking)\b/i,
+  /\b(pimp(ing)?|prostitut(ion|e)|brothel|escort\s+(service|agency))\b/i,
+  /\b(hit\s*man|contract\s+killing|murder\s+for\s+hire)\b/i,
+  /\b(money\s+laundering|racket(eering)?)\b/i,
+  /\bille?gal\s+(arms?|weapons?|firearms?)\s+(dealing|trafficking|sales?)\b/i,
+  /\b(fraud|scam|ponzi|pyramid)\s+scheme\b/i,
+];
+
+function hasProhibitedContent(text: string): boolean {
+  return PROHIBITED_JOB_PATTERNS.some((rx) => rx.test(text));
+}
+
 /**
  * GET /api/employer/jobs?email=<recruiterEmail>&status=open|closed
  *
@@ -101,6 +123,23 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "recruiterEmail, role, location required" },
         { status: 400 }
+      );
+    }
+
+    // Caroline 8/26 Round 8: prohibited-activity screening. Scan the
+    // title, description, and every required/optional skill. Any hit
+    // rejects the posting with a neutral message.
+    const screenTexts: string[] = [role, description || ""];
+    if (Array.isArray(requiredSkills)) screenTexts.push(...requiredSkills);
+    if (Array.isArray(optionalSkills)) screenTexts.push(...optionalSkills);
+    if (screenTexts.some((t) => typeof t === "string" && hasProhibitedContent(t))) {
+      return NextResponse.json(
+        {
+          error: "prohibited_activity",
+          message:
+            "This posting can't be published on Skilmatch because it references an activity we don't support. Please revise the role, description, or required skills.",
+        },
+        { status: 422 }
       );
     }
 

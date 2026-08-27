@@ -264,8 +264,19 @@ export default function DashboardPage() {
   // Caroline 6/27 Round 4: live recruiter jobs from /api/employer/jobs.
   // Replaces the hardcoded OPEN_JOBS fixture on mount. Falls back to
   // the fixture when the API has nothing for this recruiter.
-  const [liveOpenJobs, setLiveOpenJobs] = useState<OpenJob[]>(OPEN_JOBS);
-  const [liveClosedJobs, setLiveClosedJobs] = useState<ClosedJob[]>(CLOSED_JOBS);
+  // Caroline 8/26 Round 8: FPO OPEN_JOBS / CLOSED_JOBS must not be
+  // shown as real postings — start empty, populate from the API. Legacy
+  // fixtures are only shown when ?demo=1 is present.
+  const isDemoDashboard =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("demo") === "1";
+  const [liveOpenJobs, setLiveOpenJobs] = useState<OpenJob[]>(
+    isDemoDashboard ? OPEN_JOBS : []
+  );
+  const [liveClosedJobs, setLiveClosedJobs] = useState<ClosedJob[]>(
+    isDemoDashboard ? CLOSED_JOBS : []
+  );
+  const [dashboardLoaded, setDashboardLoaded] = useState(false);
   // Caroline 7/28 Round 7: recruiters using Skilmatch for multiple
   // companies need to see which company they're currently posting for.
   const [companyName, setCompanyName] = useState<string>("");
@@ -372,8 +383,10 @@ export default function DashboardPage() {
           );
           setLiveClosedJobs(mapped);
         }
+        setDashboardLoaded(true);
       } catch {
-        // network failure → fixtures remain
+        // network failure → leave state as-is; empty state renders
+        setDashboardLoaded(true);
       }
     }
     load();
@@ -586,7 +599,7 @@ export default function DashboardPage() {
             >
               <span>Open Jobs</span>
               <span className="bg-gray-200 text-gray-700 rounded-full px-2.5 py-0.5 text-xs font-bold">
-                20
+                {liveOpenJobs.length}
               </span>
             </button>
             <button
@@ -600,7 +613,7 @@ export default function DashboardPage() {
             >
               <span>Closed Jobs</span>
               <span className="bg-gray-200 text-gray-700 rounded-full px-2.5 py-0.5 text-xs font-bold">
-                53
+                {liveClosedJobs.length}
               </span>
             </button>
           </div>
@@ -635,7 +648,25 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Job rows */}
+              {/* Job rows — Caroline 8/26 Round 8: empty state when the
+                  recruiter hasn't created any jobs yet. */}
+              {dashboardLoaded && filteredOpen.length === 0 && (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-base font-bold text-gray-800 mb-2">
+                    No jobs yet.
+                  </p>
+                  <p className="text-sm text-gray-500 mb-5 max-w-md mx-auto leading-relaxed">
+                    Create your first job to start finding candidates.
+                  </p>
+                  <Link
+                    href="/post-job"
+                    className="inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold text-white bg-skTeal-bright hover:opacity-90 transition"
+                  >
+                    <Plus className="w-4 h-4" strokeWidth={3} />
+                    Create a New Job
+                  </Link>
+                </div>
+              )}
               <ul className="divide-y divide-gray-200">
                 {filteredOpen.map((job) => {
                   const isExpanded = expandedOpen === job.id;
@@ -863,6 +894,16 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div>
+              {dashboardLoaded && filteredClosed.length === 0 && (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-base font-bold text-gray-800 mb-2">
+                    No closed jobs.
+                  </p>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                    Closed jobs appear here after you close a role. You can reopen them from this tab.
+                  </p>
+                </div>
+              )}
               <ul className="divide-y divide-gray-200">
                 {filteredClosed.map((job) => {
                   const isExpanded = expandedClosed === job.id;

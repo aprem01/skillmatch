@@ -275,16 +275,21 @@ function MessagesContent() {
     setTimeout(closeNew, 1200);
   }
 
+  // Caroline 8/26 Round 8: FPO threads must not be shown as real
+  // messages. THREADS is kept for UI-testing via ?demo=1; without
+  // that flag we render an explicit empty state.
+  const demoMessages = searchParams?.get("demo") === "1";
+  const sourceThreads = demoMessages ? THREADS : [];
   const filtered = useMemo(() => {
-    if (!search.trim()) return THREADS;
+    if (!search.trim()) return sourceThreads;
     const q = search.toLowerCase();
-    return THREADS.filter(
+    return sourceThreads.filter(
       (t) =>
         t.handle.toLowerCase().includes(q) ||
         t.jobTitle.toLowerCase().includes(q) ||
         t.status.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, sourceThreads]);
 
   return (
     <div className="min-h-screen bg-coolgray-50">
@@ -454,9 +459,21 @@ function MessagesContent() {
                 </li>
               );
             })}
-            {filtered.length === 0 && (
+            {filtered.length === 0 && search.trim() && (
               <li className="px-6 py-10 text-center text-sm text-gray-500">
                 No conversations match &ldquo;{search}&rdquo;.
+              </li>
+            )}
+            {/* Caroline 8/26 Round 8: proper empty state when no messages
+                exist yet. Distinct from the search-empty state above. */}
+            {filtered.length === 0 && !search.trim() && (
+              <li className="px-6 py-12 text-center">
+                <p className="text-base font-bold text-gray-800 mb-2">
+                  No messages yet.
+                </p>
+                <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                  Messages will appear here when candidates or employers respond to an interaction.
+                </p>
               </li>
             )}
           </ul>

@@ -84,6 +84,15 @@ function CandidatesContent() {
   const [slot3, setSlot3] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [savedHandles, setSavedHandles] = useState<Set<string>>(new Set());
+  // Caroline 8/26 Round 8: live candidate fetch replaces the FPO
+  // TOP_CANDIDATES / CLOSE_MATCHES arrays. When the pool is empty we
+  // render an explicit empty state instead of placeholder rows. The
+  // legacy arrays are kept only for ?demo=1 preview URLs.
+  const [liveTop, setLiveTop] = useState<CandidateRow[]>([]);
+  const [liveClose, setLiveClose] = useState<CandidateRow[]>([]);
+  const [candidatesLoaded, setCandidatesLoaded] = useState(false);
+  const [candidateFetchFailed, setCandidateFetchFailed] = useState(false);
+  const demoMode = searchParams?.get("demo") === "1";
 
   // Gating: invite + ask + hire all require recruiter to be verified AND
   // subscribed. We hold the intended action while the modals run, then
@@ -160,6 +169,80 @@ function CandidatesContent() {
       setJobTitle(urlRole || "");
     }
   }, [router, searchParams]);
+
+  // Caroline 8/26 Round 8: fetch live candidates from the shared user
+  // pool. Empty result → explicit empty state (never FPO). The mapping
+  // below squashes API's Candidate into CandidateRow so the existing
+  // renderRow function works unchanged.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = localStorage.getItem("skillmatch_job");
+        if (!saved) {
+          setCandidatesLoaded(true);
+          return;
+        }
+        const job = JSON.parse(saved);
+        const required: string[] = Array.isArray(job.requiredSkills)
+          ? job.requiredSkills
+          : [];
+        const optional: string[] = Array.isArray(job.optionalSkills)
+          ? job.optionalSkills
+          : [];
+        if (required.length === 0 && optional.length === 0) {
+          setCandidatesLoaded(true);
+          return;
+        }
+        const res = await fetch("/api/employer/candidates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requiredSkills: required,
+            optionalSkills: optional,
+            role: job.selectedRole || job.roleInput || job.role || null,
+          }),
+        });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const rows: CandidateRow[] = (data.candidates || []).map(
+          (c: {
+            handle: string;
+            matchScore: number;
+            matchedRequired: string[];
+            missingRequired: string[];
+            totalRequired: number;
+          }) => ({
+            handle: c.handle,
+            match:
+              c.missingRequired.length === 0
+                ? "check"
+                : `${c.matchedRequired.length}/${c.totalRequired}`,
+            extra: "+0",
+            availability: "now",
+          })
+        );
+        setLiveTop(rows.filter((_, i) => (data.candidates[i] as { missingRequired: string[] }).missingRequired.length === 0));
+        setLiveClose(rows.filter((_, i) => (data.candidates[i] as { missingRequired: string[] }).missingRequired.length > 0));
+        setCandidatesLoaded(true);
+      } catch {
+        if (!cancelled) {
+          setCandidateFetchFailed(true);
+          setCandidatesLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Rows to render — live pool by default, FPO arrays only in ?demo=1.
+  const topRows = demoMode ? TOP_CANDIDATES : liveTop;
+  const closeRows = demoMode ? CLOSE_MATCHES : liveClose;
+  const hasAnyRows = topRows.length + closeRows.length > 0;
 
   function openInvite(c: CandidateRow) {
     setInviteCandidate(c);
@@ -452,7 +535,11 @@ function CandidatesContent() {
               {jobTitle || "Your role"}
             </h1>
             <p className="text-sm text-skGray-desc">
-              ~148 candidates found • Avg market pay: $34-$42/hr
+              {candidatesLoaded
+                ? `${topRows.length + closeRows.length} candidate${
+                    topRows.length + closeRows.length === 1 ? "" : "s"
+                  } found`
+                : "Searching your talent pool…"}
             </p>
           </div>
           <div className="shrink-0">
@@ -468,7 +555,7 @@ function CandidatesContent() {
         {(() => {
           const filterMode = searchParams?.get("filter") === "saved";
           if (filterMode) {
-            const allRows = [...TOP_CANDIDATES, ...CLOSE_MATCHES];
+            const allRows = [...topRows, ...closeRows];
             const savedRows = allRows.filter((c) => savedHandles.has(c.handle));
             return (
               <section className="mb-8">
@@ -498,6 +585,35 @@ function CandidatesContent() {
               </section>
             );
           }
+          // Caroline 8/26 Round 8: proper empty state when the shared
+          // pool has no matching candidates (no FPO fallback).
+          if (candidatesLoaded && !hasAnyRows) {
+            return (
+              <section className="mb-8">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm px-6 py-12 text-center">
+                  <h2 className="text-lg font-bold text-gray-800 mb-2">
+                    {candidateFetchFailed
+                      ? "We couldn't load candidates right now."
+                      : "No candidates found yet."}
+                  </h2>
+                  <p className="text-sm text-skGray-desc leading-relaxed max-w-md mx-auto">
+                    {candidateFetchFailed
+                      ? "Please try again in a moment."
+                      : "We’ll notify you when candidates matching this role become available. In the meantime, refine the required skills or broaden the role."}
+                  </p>
+                </div>
+              </section>
+            );
+          }
+          if (!candidatesLoaded) {
+            return (
+              <section className="mb-8">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm px-6 py-12 text-center">
+                  <p className="text-sm text-skGray-desc">Loading candidates…</p>
+                </div>
+              </section>
+            );
+          }
           return (
             <>
               {/* Top Candidates table */}
@@ -519,7 +635,13 @@ function CandidatesContent() {
                   </div>
 
                   <div>
-                    {TOP_CANDIDATES.map((c, i) => renderRow(c, "top", i))}
+                    {topRows.length === 0 ? (
+                      <p className="px-6 py-8 text-center text-sm text-skGray-desc">
+                        No candidates yet meet every required skill for this role.
+                      </p>
+                    ) : (
+                      topRows.map((c, i) => renderRow(c, "top", i))
+                    )}
                   </div>
                 </div>
               </section>
@@ -543,7 +665,13 @@ function CandidatesContent() {
                   </div>
 
                   <div>
-                    {CLOSE_MATCHES.map((c, i) => renderRow(c, "close", i))}
+                    {closeRows.length === 0 ? (
+                      <p className="px-6 py-8 text-center text-sm text-skGray-desc">
+                        No close matches yet.
+                      </p>
+                    ) : (
+                      closeRows.map((c, i) => renderRow(c, "close", i))
+                    )}
                   </div>
                 </div>
               </section>

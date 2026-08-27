@@ -36,13 +36,31 @@ export default function SkillmatchHeader({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // Caroline 8/26 Round 8 nav spec — top item is the company name (as
+  // account link), then dashboard / create-job / messages / mission /
+  // contact / logout. Company name resolved by the parent when the
+  // recruiter's verification is loaded; falls back to "My Account".
+  const companyLabel =
+    typeof window !== "undefined"
+      ? (() => {
+          try {
+            const raw = localStorage.getItem("skillmatch_verification");
+            if (!raw) return "My Account";
+            const v = JSON.parse(raw);
+            return v.companyName || v.company || "My Account";
+          } catch {
+            return "My Account";
+          }
+        })()
+      : "My Account";
   const MENU_ITEMS: { label: string; href: string; key: string }[] = [
+    { label: companyLabel, href: "/account", key: "account" },
+    { label: "My Dashboard", href: "/dashboard", key: "dashboard" },
+    { label: "Create a New Job", href: "/post-job", key: "post" },
+    { label: "My Messages", href: "/messages", key: "messages" },
     { label: "Our Mission", href: "/mission", key: "mission" },
-    { label: "Your Profile", href: "/account", key: "profile" },
-    { label: "Your Dashboard", href: "/dashboard", key: "dashboard" },
-    { label: "Your Messages", href: "/messages", key: "messages" },
-    { label: "Saved Candidates", href: "/candidates?filter=saved", key: "saved" },
     { label: "Contact Us", href: "/contact", key: "contact" },
+    { label: "Logout", href: "/logout", key: "logout" },
   ];
 
   return (

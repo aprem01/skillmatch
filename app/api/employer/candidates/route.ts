@@ -36,19 +36,21 @@ export async function POST(req: Request) {
     const required: string[] = requiredSkills || [];
     const optional: string[] = optionalSkills || [];
 
-    // ── Real candidates first (Caroline 5/22 → fundable demo) ──────
-    // Query the shared UserSkill pool. We match normalizedTerm
-    // case-insensitively against the union of required + optional skills,
-    // group by anonymousHandle, then score each user against the basket.
+    // ── Real candidates only (Caroline 8/26 Round 8 rule) ──────────
+    // Query the shared UserSkill pool. FPO / mock candidates must never
+    // be presented as real matches — the recruiter sees a proper empty
+    // state instead. generateMockCandidates() is kept for explicit UI
+    // testing but is gated behind NEXT_PUBLIC_ALLOW_MOCK_CANDIDATES.
     const realCandidates = await queryRealCandidates(required, optional);
-
-    // Fall back to mock data ONLY when the pool is empty (early traffic).
-    // This keeps the demo working while we onboard real users; once we
-    // have ≥1 matching user, every recruiter sees real candidates.
+    const allowMock =
+      process.env.NEXT_PUBLIC_ALLOW_MOCK_CANDIDATES === "1" &&
+      (req.headers.get("x-mock-candidates") === "1");
     const candidates: Candidate[] =
       realCandidates.length > 0
         ? realCandidates
-        : generateMockCandidates(required, optional);
+        : allowMock
+          ? generateMockCandidates(required, optional)
+          : [];
 
     // Cluster check on the recruiter's basket. Surfaces industry-incoherent
     // searches (e.g. "Solar Panel Installation" + "Patient Care") in
