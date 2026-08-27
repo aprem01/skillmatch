@@ -1031,6 +1031,7 @@ export default function DashboardPage() {
                                         saved: 0,
                                         conversations: 0,
                                         interviewsScheduled: 0,
+                                        offersSent: 0,
                                       },
                                       skills: [],
                                     } as OpenJob,
