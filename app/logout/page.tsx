@@ -15,16 +15,21 @@ export default function LogoutPage() {
   const router = useRouter();
   useEffect(() => {
     try {
-      // Clear everything Skilmatch persists client-side. Legacy keys
-      // included for safety even if not currently in use.
-      const KEYS = [
-        "skillmatch_verification",
-        "skillmatch_subscription",
-        "skillmatch_job",
-        "skillmatch_saved",
-        "skillmatch_saved_by_job",
-      ];
-      for (const k of KEYS) localStorage.removeItem(k);
+      // Blanket sweep every skillmatch_-prefixed key across BOTH
+      // localStorage and sessionStorage. Explicit prefix means we
+      // don't leave anything behind if a future feature adds a new key.
+      // Wrapped in try/catch per-storage because private/incognito
+      // modes can throw on access.
+      const SWEEP = (store: Storage) => {
+        const doomed: string[] = [];
+        for (let i = 0; i < store.length; i++) {
+          const k = store.key(i);
+          if (k && k.startsWith("skillmatch_")) doomed.push(k);
+        }
+        for (const k of doomed) store.removeItem(k);
+      };
+      try { SWEEP(localStorage); } catch {}
+      try { SWEEP(sessionStorage); } catch {}
     } catch {
       // ignore — even if storage is inaccessible, the redirect still lands
     }
