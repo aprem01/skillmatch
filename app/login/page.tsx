@@ -4,24 +4,23 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 /**
- * /login?email=<workEmail>
+ * /login?email=<workEmail>&token=<SKILMATCH_LOGIN_TOKEN>
  *
- * One-shot recruiter login for pre-verified accounts. Hits
- * /api/recruiter/status server-side to confirm the row is verified,
- * populates localStorage.skillmatch_verification with the shape the
- * app expects, then redirects to /dashboard.
+ * Test-helper login for pre-verified accounts. Callers MUST supply a
+ * shared token matching NEXT_PUBLIC_SKILMATCH_LOGIN_TOKEN — without it
+ * the endpoint refuses so a random attacker can't just guess emails
+ * and log in as arbitrary recruiters.
  *
- * If the email isn't verified in the DB, we send the user through the
- * normal RecruiterVerificationModal path (i.e. /post-job) instead.
- *
- * This bridges the gap between "pre-verify the row in the DB" and the
- * modal path that otherwise still asks the user to click a magic-link
- * email that might never arrive.
+ * This is not a real authentication system. It's a controlled bridge
+ * so pre-seeded test cohorts can be entered without waiting on a
+ * magic-link email that might never arrive. Real recruiter session
+ * auth (email OTP → server session cookie) is the deferred follow-up.
  */
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const email = (params.get("email") || "").trim().toLowerCase();
+  const token = params.get("token") || "";
   const [message, setMessage] = useState("Signing you in…");
 
   useEffect(() => {
@@ -31,10 +30,23 @@ function LoginInner() {
         setMessage("Missing ?email= parameter.");
         return;
       }
+      if (!token) {
+        setMessage(
+          "Missing ?token= parameter. Ask an admin for the current test-login token."
+        );
+        return;
+      }
       try {
         const res = await fetch(
-          `/api/recruiter/status?email=${encodeURIComponent(email)}`
+          `/api/recruiter/self-profile?email=${encodeURIComponent(email)}`,
+          { headers: { "x-skilmatch-login-token": token } }
         );
+        if (res.status === 401) {
+          setMessage(
+            "Test-login token is invalid. Ask an admin for the current token."
+          );
+          return;
+        }
         const data = await res.json();
         if (cancelled) return;
         if (!data.verified) {
@@ -67,7 +79,7 @@ function LoginInner() {
     return () => {
       cancelled = true;
     };
-  }, [email, router]);
+  }, [email, token, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-6">

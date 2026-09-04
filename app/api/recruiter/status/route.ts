@@ -24,15 +24,15 @@ export async function GET(req: Request) {
       where: { workEmail: email },
     });
     if (!row) return NextResponse.json({ verified: false });
-    // Include the persisted profile fields so /login can populate the
-    // full skillmatch_verification localStorage blob in one round trip.
+    // MINIMAL shape only. Never leak companyName / recruiterName /
+    // jobTitle / companyWebsite in this endpoint — it's callable
+    // without any auth, so an attacker could enumerate recruiter PII
+    // by iterating emails. The /login helper reads profile fields
+    // from a separately-gated /api/recruiter/self-profile that
+    // requires the SKILMATCH_LOGIN_TOKEN.
     return NextResponse.json({
       verified: row.status === "verified",
       status: row.status,
-      companyName: row.companyName,
-      recruiterName: row.recruiterName,
-      jobTitle: row.jobTitle,
-      companyWebsite: row.companyWebsite,
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "db error";
