@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 /**
@@ -19,19 +19,28 @@ import { useRouter, useSearchParams } from "next/navigation";
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const email = (params.get("email") || "").trim().toLowerCase();
-  const token = params.get("token") || "";
+  // Capture ONCE and freeze into a ref — history.replaceState below
+  // triggers useSearchParams to re-evaluate to an empty state, so the
+  // effect would otherwise re-run with no email/token. Ref survives.
+  const captured = useRef<{ email: string; token: string } | null>(null);
+  if (captured.current === null) {
+    captured.current = {
+      email: (params.get("email") || "").trim().toLowerCase(),
+      token: params.get("token") || "",
+    };
+  }
+  const ranRef = useRef(false);
   const [message, setMessage] = useState("Signing you in…");
 
   useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
     let cancelled = false;
+    const { email, token } = captured.current!;
     // Referer / history leak defence: strip the token (and email) from
     // the visible URL immediately so any subsequent navigation or
-    // embedded resource on /dashboard doesn't ship the token to a third
-    // party in the Referer header. history.replaceState doesn't fire a
-    // navigation — the /login page keeps rendering — but it does mean
-    // the browser back-button will show the cleaned URL, and any
-    // Referer emitted from here on will be "/login" without params.
+    // embedded resource on /dashboard doesn't ship the token to a
+    // third party in the Referer header.
     if (typeof window !== "undefined") {
       try {
         window.history.replaceState({}, "", "/login");
@@ -93,7 +102,8 @@ function LoginInner() {
     return () => {
       cancelled = true;
     };
-  }, [email, token, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-6">
