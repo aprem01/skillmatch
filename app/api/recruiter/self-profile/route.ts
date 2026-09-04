@@ -13,11 +13,12 @@ export const dynamic = "force-dynamic";
  * public /api/recruiter/status endpoint (which any attacker could
  * enumerate emails against).
  *
- * The shared token is set in Vercel env as SKILMATCH_LOGIN_TOKEN and
- * mirrored client-side as NEXT_PUBLIC_SKILMATCH_LOGIN_TOKEN so the
- * /login page can pass it. It's not a real auth mechanism — it's a
- * "please don't accidentally leak PII via a script kiddie loop"
- * curtain until proper recruiter session auth lands.
+ * The shared token is set ONLY as a server-side env var
+ * (SKILMATCH_LOGIN_TOKEN). It is NOT exposed via NEXT_PUBLIC_ — the
+ * /login page reads it from the ?token= URL parameter that a human
+ * administrator supplies out-of-band. Not a real auth mechanism —
+ * it's a "please don't accidentally leak PII via a script kiddie
+ * loop" curtain until proper recruiter session auth lands.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);

@@ -25,6 +25,20 @@ function LoginInner() {
 
   useEffect(() => {
     let cancelled = false;
+    // Referer / history leak defence: strip the token (and email) from
+    // the visible URL immediately so any subsequent navigation or
+    // embedded resource on /dashboard doesn't ship the token to a third
+    // party in the Referer header. history.replaceState doesn't fire a
+    // navigation — the /login page keeps rendering — but it does mean
+    // the browser back-button will show the cleaned URL, and any
+    // Referer emitted from here on will be "/login" without params.
+    if (typeof window !== "undefined") {
+      try {
+        window.history.replaceState({}, "", "/login");
+      } catch {
+        // Some browsers/private modes throw; not worth blocking on.
+      }
+    }
     (async () => {
       if (!email || !email.includes("@")) {
         setMessage("Missing ?email= parameter.");
