@@ -24,13 +24,19 @@ export async function GET(req: Request) {
       where: { workEmail: email },
     });
     if (!row) return NextResponse.json({ verified: false });
+    // Include the persisted profile fields so /login can populate the
+    // full skillmatch_verification localStorage blob in one round trip.
     return NextResponse.json({
       verified: row.status === "verified",
       status: row.status,
+      companyName: row.companyName,
+      recruiterName: row.recruiterName,
+      jobTitle: row.jobTitle,
+      companyWebsite: row.companyWebsite,
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "db error";
     console.error("recruiter status error:", errMsg);
-    return NextResponse.json({ verified: false, error: errMsg });
+    return NextResponse.json({ verified: false, error: "Internal error" });
   }
 }
