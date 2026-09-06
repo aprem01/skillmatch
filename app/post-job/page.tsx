@@ -118,24 +118,14 @@ function findRoleVariants(query: string): RoleVariant[] {
     if (words.some((w) => w.startsWith(q) || q.startsWith(w))) return variants;
   }
 
-  // Fallback — generate a generic set
-  return [
-    {
-      title: `${query} — General`,
-      requiredSkills: ["Communication", "Problem Solving", "Time Management", "Teamwork"],
-      optionalSkills: ["Microsoft Office", "Customer Service", "Adaptability"],
-    },
-    {
-      title: `${query} — Senior`,
-      requiredSkills: ["Leadership", "Strategic Planning", "Mentoring", "Project Management"],
-      optionalSkills: ["Budget Management", "Cross-functional Collaboration", "Reporting"],
-    },
-    {
-      title: `${query} — Entry Level`,
-      requiredSkills: ["Willingness to Learn", "Basic Computer Skills", "Reliability", "Communication"],
-      optionalSkills: ["Internship Experience", "Relevant Coursework", "Bilingual"],
-    },
-  ];
+  // Caroline 9/4 Round 9 P0: NO generic fallback. Previously this returned
+  // "Communication / Problem Solving / Teamwork / Mentoring / Strategic
+  // Planning" for ANY unmatched query — which is exactly how "Hitman" and
+  // "Child Porn Photographer" got a legitimate-looking skill list when the
+  // API errored and the client fell through here. Caroline's global rule:
+  // an incorrect match is worse than no match. Unknown role + API down →
+  // empty dropdown, and the recruiter retries.
+  return [];
 }
 
 /* ------------------------------------------------------------------ */
@@ -244,6 +234,13 @@ function PostJobContent() {
   const [payPeriod, setPayPeriod] = useState<"year" | "month" | "hour">("year");
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   const [roleVariants, setRoleVariants] = useState<RoleVariant[]>([]);
+  // Caroline 9/4 Round 9 P0: server-side safety verdict on the role.
+  // "block" → red banner, no variants. "clarify" → amber banner asking
+  // the recruiter to describe the legitimate role.
+  const [roleSafety, setRoleSafety] = useState<{
+    kind: "block" | "clarify";
+    message: string;
+  } | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [newSkill, setNewSkill] = useState("");
   const [animatedSkills, setAnimatedSkills] = useState<Set<string>>(new Set());
@@ -353,9 +350,11 @@ function PostJobContent() {
     if (value.trim().length < 2) {
       setRoleVariants([]);
       setShowDropdown(false);
+      setRoleSafety(null);
       return;
     }
 
+    setRoleSafety(null);
     setIsLoadingRoles(true);
     debounceRef.current = setTimeout(async () => {
       // Try live AI API first, fall back to mock data
@@ -366,6 +365,33 @@ function PostJobContent() {
           body: JSON.stringify({ query: value.trim() }),
         });
         const data = await res.json();
+        // Caroline 9/4 Round 9 P0: never fall through to the mock list on a
+        // safety verdict — that would resurrect the exact bug where "Hitman"
+        // got Problem Solving / Teamwork attached.
+        if (data.blocked) {
+          setRoleVariants([]);
+          setShowDropdown(false);
+          setRoleSafety({
+            kind: "block",
+            message:
+              data.message ||
+              "This role can't be posted on Skilmatch because it describes an activity we don't support.",
+          });
+          setIsLoadingRoles(false);
+          return;
+        }
+        if (data.needsClarification) {
+          setRoleVariants([]);
+          setShowDropdown(false);
+          setRoleSafety({
+            kind: "clarify",
+            message:
+              data.clarifyPrompt ||
+              "Can you describe the legitimate work this role involves?",
+          });
+          setIsLoadingRoles(false);
+          return;
+        }
         if (data.variants && data.variants.length > 0) {
           setRoleVariants(data.variants);
           setShowDropdown(true);
@@ -619,6 +645,23 @@ function PostJobContent() {
           />
 
           {/* Loading indicator */}
+          {roleSafety && (
+            <div
+              role="alert"
+              className={`mt-2 rounded-xl border-2 px-4 py-3 text-sm ${
+                roleSafety.kind === "block"
+                  ? "border-red-300 bg-red-50 text-red-800"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
+            >
+              <p className="font-semibold">
+                {roleSafety.kind === "block"
+                  ? "This role isn’t supported on Skilmatch."
+                  : "We need a little more detail."}
+              </p>
+              <p className="mt-0.5">{roleSafety.message}</p>
+            </div>
+          )}
           {isLoadingRoles && (
             <div className="absolute right-4 top-[46px]">
               <div className="w-5 h-5 border-2 border-skTeal border-t-transparent rounded-full animate-spin" />

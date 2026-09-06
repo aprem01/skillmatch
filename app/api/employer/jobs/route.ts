@@ -1,29 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { screenInput, BLOCK_MESSAGE_EMPLOYER } from "@/lib/safety";
 
 export const dynamic = "force-dynamic";
-
-// Caroline 8/26 Round 8 global rule: prohibited-activity screening on
-// employer job postings. Same regex list as PayRanker's normalize
-// endpoint — kept inline (rather than shared) so the two products stay
-// deployable independently. If either the title, description, or any
-// required/optional skill matches, the job is rejected with a 422.
-const PROHIBITED_JOB_PATTERNS: RegExp[] = [
-  /\b(drug|narcotics?|cocaine|meth|heroin|fentanyl|opioid)\s+(dealing|dealer|trafficking|selling|distribution)\b/i,
-  /\bdrug\s+trafficker\b/i,
-  /\bhuman\s+trafficking\b/i,
-  /\bsex\s+trafficking\b/i,
-  /\bchild\s+(exploitation|pornography|trafficking)\b/i,
-  /\b(pimp(ing)?|prostitut(ion|e)|brothel|escort\s+(service|agency))\b/i,
-  /\b(hit\s*man|contract\s+killing|murder\s+for\s+hire)\b/i,
-  /\b(money\s+laundering|racket(eering)?)\b/i,
-  /\bille?gal\s+(arms?|weapons?|firearms?)\s+(dealing|trafficking|sales?)\b/i,
-  /\b(fraud|scam|ponzi|pyramid)\s+scheme\b/i,
-];
-
-function hasProhibitedContent(text: string): boolean {
-  return PROHIBITED_JOB_PATTERNS.some((rx) => rx.test(text));
-}
 
 /**
  * GET /api/employer/jobs?email=<recruiterEmail>&status=open|closed
@@ -126,21 +105,47 @@ export async function POST(req: Request) {
       );
     }
 
-    // Caroline 8/26 Round 8: prohibited-activity screening. Scan the
-    // title, description, and every required/optional skill. Any hit
-    // rejects the posting with a neutral message.
-    const screenTexts: string[] = [role, description || ""];
-    if (Array.isArray(requiredSkills)) screenTexts.push(...requiredSkills);
-    if (Array.isArray(optionalSkills)) screenTexts.push(...optionalSkills);
-    if (screenTexts.some((t) => typeof t === "string" && hasProhibitedContent(t))) {
+    // Caroline 9/4 Round 9: prohibited-activity screening via the shared
+    // safety module (fast-path + protective allowlist + AI context).
+    // The role title is screened with the full skill list as context so
+    // an innocuous title can't hide illicit required skills, and vice
+    // versa. Any block rejects the posting before DB insert.
+    const allSkills: string[] = [
+      ...(Array.isArray(requiredSkills) ? requiredSkills : []),
+      ...(Array.isArray(optionalSkills) ? optionalSkills : []),
+    ].filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+    const roleScreen = await screenInput({
+      input: role,
+      context: [...allSkills, ...(description ? [String(description).slice(0, 400)] : [])],
+      surface: "employer_role",
+    });
+    if (roleScreen.verdict !== "allow") {
       return NextResponse.json(
         {
-          error: "prohibited_activity",
+          error: roleScreen.verdict === "block" ? "prohibited_activity" : "needs_clarification",
           message:
-            "This posting can't be published on Skilmatch because it references an activity we don't support. Please revise the role, description, or required skills.",
+            roleScreen.verdict === "block"
+              ? BLOCK_MESSAGE_EMPLOYER
+              : roleScreen.clarifyPrompt ||
+                "Please clarify the legitimate work this role describes before posting.",
         },
         { status: 422 }
       );
+    }
+    // Screen each skill individually with the role + other skills as context.
+    for (const sk of allSkills) {
+      const r = await screenInput({
+        input: sk,
+        context: [role, ...allSkills.filter((x) => x !== sk)],
+        surface: "employer_skill",
+        skipAI: true, // fast-path only per-skill; role screen above already ran AI
+      });
+      if (r.verdict === "block") {
+        return NextResponse.json(
+          { error: "prohibited_activity", message: BLOCK_MESSAGE_EMPLOYER },
+          { status: 422 }
+        );
+      }
     }
 
     const created = await prisma.job.create({

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { classifySkillCluster } from "@/lib/taxonomy";
+import { screenInput, BLOCK_MESSAGE_EMPLOYER } from "@/lib/safety";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +30,51 @@ export async function POST(req: Request) {
       return NextResponse.json({ variants: [] });
     }
 
+    // Caroline 9/4 Round 9 P0: screen the role BEFORE any AI generates
+    // skills for it. Previously "Hitman" / "Child Porn Photographer" /
+    // "Pimp" sailed through to the Candidates page with Problem Solving,
+    // Teamwork, Mentoring, etc. attached — normalising an illegal
+    // occupation into a legitimate-looking taxonomy. This is the single
+    // most important safety gate on Skilmatch.
+    const safety = await screenInput({ input: query, surface: "employer_role" });
+    if (safety.verdict === "block") {
+      void logEvent("employer_role_blocked", {
+        query,
+        layer: safety.layer,
+        reason: safety.reason,
+        durationMs: Date.now() - startTime,
+      });
+      return NextResponse.json(
+        { blocked: true, message: BLOCK_MESSAGE_EMPLOYER, variants: [] },
+        { status: 422 }
+      );
+    }
+    if (safety.verdict === "clarify") {
+      void logEvent("employer_role_clarify", {
+        query,
+        layer: safety.layer,
+        reason: safety.reason,
+        durationMs: Date.now() - startTime,
+      });
+      return NextResponse.json(
+        {
+          needsClarification: true,
+          clarifyPrompt: safety.clarifyPrompt,
+          variants: [],
+        },
+        { status: 200 }
+      );
+    }
+
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1000,
       messages: [
         {
           role: "user",
           content: `You are a job classification expert. An employer typed this role: "${query}"
+
+If this role describes an ILLEGAL activity (drug dealing, trafficking, sex work procurement, violence for hire, fraud, weapons trafficking, CSAM) return {"variants": [], "prohibited": true}. Roles whose purpose is to PREVENT / TREAT / INVESTIGATE / EDUCATE ABOUT an illicit activity are LEGITIMATE — never flag those.
 
 Return ONLY valid JSON (no markdown):
 {
@@ -86,6 +125,18 @@ Rules:
         durationMs: Date.now() - startTime,
       });
       return NextResponse.json({ variants: [] });
+    }
+
+    if ((parsed as { prohibited?: boolean }).prohibited === true) {
+      void logEvent("employer_role_blocked", {
+        query,
+        layer: "ai_generation",
+        durationMs: Date.now() - startTime,
+      });
+      return NextResponse.json(
+        { blocked: true, message: BLOCK_MESSAGE_EMPLOYER, variants: [] },
+        { status: 422 }
+      );
     }
 
     // Caroline 5/22: tag each role variant with its dominant industry,
